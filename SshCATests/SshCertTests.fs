@@ -12,24 +12,17 @@ let tests =
     testList "SSH Certificate Tests" [
         test "End to end with ssh-keygen validation" {
             use ca = RSA.Create()
-            let caPubKey = ca.ExportRSAPublicKeyPem() |> PublicKey.ofRsaPublicKeyPem
-            let pubKeyToSign = TestData.testSshKey |> PublicKey.ofSshPublicKey
-            use certContents =
-                SshCertificate.buildCertificateContentStream
-                    (Some TestData.nonce)
-                    pubKeyToSign
-                    0UL
-                    "testkey"
-                    ["someUser"]
-                    (DateTimeOffset(DateTime(2025, 6, 13, 8, 0, 0)))
-                    (DateTimeOffset(DateTime(2025, 6, 13, 8, 0, 0)).AddHours 2)
-                    []
-                    []
-                    caPubKey
-            let signature = certContents |> SshCertificate.sign (fun ms -> ca.SignData(ms, HashAlgorithmName.SHA512, RSASignaturePadding.Pkcs1))
-            signature |> SshCertificate.appendSignature certContents
-            let certBytes = SshCertificate.getCertificateBytes certContents
-            let certLine = certBytes |> SshCertificate.toSshFormat "testkey@domain"
+            let caPubKey = ca.ExportRSAPublicKeyPem() |> PublicKey.OfRsaPublicKeyPem
+            let pubKeyToSign = TestData.testSshKey |> PublicKey.OfSshPublicKey
+            let certInfo =
+                CertificateInfo("testkey", pubKeyToSign, caPubKey,
+                                TestData.nonce,
+                                Serial=0UL, Principals=["someUser"],
+                                ValidAfter=DateTimeOffset(DateTime(2025, 6, 13, 8, 0, 0)),
+                                ValidBefore=DateTimeOffset(DateTime(2025, 6, 13, 8, 0, 0)).AddHours 2
+                )
+            let certAuth = CertificateAuthority(fun ms -> ca.SignData(ms, HashAlgorithmName.SHA512, RSASignaturePadding.Pkcs1))
+            let certLine = certAuth.SignAndSerialize(certInfo, "testkey@domain")
             let tempFile = Path.GetTempFileName()
             File.WriteAllText(tempFile, certLine)
             let cmdResult =

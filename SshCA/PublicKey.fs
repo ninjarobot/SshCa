@@ -4,39 +4,93 @@ open System
 open System.IO
 open System.Security.Cryptography
 open System.Text
-open SshBuffer
 
-type PublicKey =
-    {
-        Algorithm: string
-        Exponent: byte array
-        Modulus: byte array
-        Comment: string option
-    }
-
-module PublicKey =
+/// Represents a public key adhering to the SSH public key standard.
+///
+/// This type encapsulates properties and methods for handling and formatting
+/// public key information, including the algorithm, exponent, modulus, and an
+/// optional comment. It provides functionality for parsing keys from strings
+/// and converting keys to their SSH public key representation.
+type PublicKey(algorithm:string, exponent:byte array, modulus:byte array, comment:string) =
+    /// Represents the identifier for the RSA algorithm in the context
+    /// of SSH public key operations. The value is a literal string
+    /// "ssh-rsa", which is used to specify the RSA algorithm type in
+    /// SSH key exchanges and related operations.
     [<Literal>]
-    let SshRsa = "ssh-rsa"
+    static let SshRsa = "ssh-rsa"
 
-    let ofSshPublicKey (keyLine:string) =
+    /// Represents a public key used in cryptographic algorithms.
+    ///
+    /// The `PublicKey` type includes properties and methods necessary for creating, managing,
+    /// and converting public keys for SSH and other use cases. It includes fields such as
+    /// `Algorithm`, `Exponent`, `Modulus`, and an optional `Comment`.
+    member val Algorithm: string = algorithm with get
+
+    /// Represents the exponent value of a public RSA key as a byte array.
+    ///
+    /// The exponent is a critical component of the RSA public key used
+    /// in cryptographic algorithms. This property provides read-only
+    /// access to the exponent value stored in the `PublicKey` instance.
+    member val Exponent: byte array = exponent with get
+
+    /// The `Modulus` property represents the modulus component of a public key, stored as a byte array.
+    /// This is a read-only property that returns the modulus, a critical part of the cryptographic
+    /// public key used in various operations, including SSH key generation and RSA encryption.
+    member val Modulus: byte array = modulus with get
+
+    /// Represents a public key with associated metadata and functionality.
+    ///
+    /// A PublicKey contains properties such as the algorithm, key bytes, and an optional comment.
+    /// It also provides methods to perform operations like converting the PublicKey instance into a format
+    /// compatible with SSH public key representations.
+    member val Comment: string = comment with get
+
+    /// Represents an SSH public key with RSA algorithm and associated parameters.
+    ///
+    /// Properties:
+    /// - Algorithm: Represents the type of the algorithm (e.g., "ssh-rsa").
+    /// - Exponent: The public exponent of the RSA key.
+    /// - Modulus: The modulus of the RSA key.
+    /// - Comment: An optional comment associated with the public key.
+    new(algorithm, exponent, modulus) = PublicKey(algorithm, exponent, modulus, null)
+
+    /// Parses an SSH public key from its string representation.
+    ///
+    /// This function processes a string representation of an SSH public key,
+    /// extracting its algorithm name, base64-encoded key data, and an optional
+    /// comment. It validates that the provided string format adheres to the SSH
+    /// public key standard. If the string contains sufficient valid information,
+    /// an instance of the `PublicKey` is returned.
+    ///
+    /// Parameters:
+    /// - `keyLine`: A string representation of the SSH public key,
+    ///   typically in the form `<algorithm> <base64-key-data> [optional-comment]`.
+    ///
+    /// Returns:
+    /// - An instance of the `PublicKey` class initialized with the parsed key
+    ///   data and optional comment.
+    ///
+    /// Exceptions:
+    /// - `System.FormatException`: Thrown when the key string is not properly
+    ///   formatted or when base64 decoding fails.
+    /// - `System.InvalidOperationException`: Thrown when the parsed data does not
+    ///   contain sufficient information to construct a valid public key.
+    ///
+    /// Assumptions:
+    /// - The key string follows the standard SSH public key format.
+    static member OfSshPublicKey (keyLine:string) =
         let sections = keyLine.Split ([|' ';'\t'|], StringSplitOptions.RemoveEmptyEntries)
         if sections.Length > 1 then
             let algName = sections[0]
             let b64data = sections[1]
             let data = b64data |> Convert.FromBase64String
             use ms = new MemoryStream(data)
-            let alg = readSshBuf ms
-            let e = readSshBuf ms
-            let n = readSshBuf ms
-            let comment = 
-                if sections.Length > 2 then sections[2] |> Some
-                else None
-            {
-                Algorithm = alg |> Encoding.UTF8.GetString
-                Exponent = e
-                Modulus = n
-                Comment = comment
-            }
+            let sshBuf = SshBuffer(ms)
+            let alg = sshBuf.ReadSshBuf() |> Encoding.UTF8.GetString
+            let e = sshBuf.ReadSshBuf()
+            let n = sshBuf.ReadSshBuf()
+            if sections.Length > 2 then PublicKey(alg, e, n, sections[2]) // key comment.
+            else PublicKey(alg, e, n)
         else
             failwith "Malformed key line"
 
@@ -50,11 +104,12 @@ module PublicKey =
     ///
     /// Returns:
     ///   A byte array representing the SSH public key in the required format.
-    let toSshPublicKeyBytes (pubKey:PublicKey) =
+    static member ToSshPublicKeyBytes (pubKey:PublicKey) =
         using (new MemoryStream()) (fun ms ->
-            pubKey.Algorithm |> (Encoding.UTF8.GetBytes >> appendSshBuf ms)
-            pubKey.Exponent |> appendSshBuf ms
-            pubKey.Modulus |> appendSshBuf ms
+            let sshBuf = SshBuffer(ms)
+            pubKey.Algorithm |> (Encoding.UTF8.GetBytes >> sshBuf.AppendSshBuf)
+            pubKey.Exponent |> sshBuf.AppendSshBuf
+            pubKey.Modulus |> sshBuf.AppendSshBuf
             ms.ToArray()
         )
 
@@ -68,14 +123,21 @@ module PublicKey =
     ///
     /// Returns:
     ///   A string in the SSH public key format.
-    let toSshPublicKey (pubKey:PublicKey) =
-        let pkBytes = toSshPublicKeyBytes pubKey
-        String.Format(
-            "{0} {1} {2}",
-            pubKey.Algorithm,
-            (Convert.ToBase64String pkBytes),
-            pubKey.Comment |> Option.defaultValue ""
-        )
+    static member ToSshPublicKey (pubKey:PublicKey) =
+        let pkBytes = PublicKey.ToSshPublicKeyBytes pubKey
+        if String.IsNullOrWhiteSpace pubKey.Comment then
+            String.Format(
+                "{0} {1}",
+                pubKey.Algorithm,
+                (Convert.ToBase64String pkBytes)
+            )
+        else
+            String.Format(
+                "{0} {1} {2}",
+                pubKey.Algorithm,
+                (Convert.ToBase64String pkBytes),
+                pubKey.Comment
+            )
 
     /// Converts a PEM-encoded RSA public key string to an internal representation
     /// suitable for working with SSH-compatible RSA parameters.
@@ -90,7 +152,7 @@ module PublicKey =
     /// - Exponent: The public exponent of the RSA key.
     /// - Modulus: The modulus of the RSA key, adjusted to a positive MSB if required.
     /// - Comment: An optional comment field, which defaults to None.
-    let ofRsaPublicKeyPem (pem:string) =
+    static member OfRsaPublicKeyPem (pem:string) =
         use rsa = RSA.Create()
         rsa.ImportFromPem(pem)
         let exported = rsa.ExportParameters(false)
@@ -102,12 +164,7 @@ module PublicKey =
                 0uy
                 yield! exported.Modulus
             } |> Array.ofSeq
-        {
-            Algorithm = SshRsa
-            Exponent = exported.Exponent
-            Modulus = forcePosMod
-            Comment = None
-        }
+        PublicKey(SshRsa, exported.Exponent, forcePosMod)
 
     /// Converts a `PublicKey` to an RSA public key represented as an `RSA` object.
     /// This function uses the `Exponent` and `Modulus` properties of the given `PublicKey`
@@ -120,5 +177,5 @@ module PublicKey =
     ///
     /// Returns:
     ///   An `RSA` object initialized with the specified public key parameters.
-    let toRsaPublicKey (pubKey:PublicKey) =
+    static member ToRsaPublicKey (pubKey:PublicKey) =
         RSA.Create(RSAParameters(Exponent=pubKey.Exponent, Modulus=pubKey.Modulus))

@@ -3,40 +3,38 @@ namespace SshCA
 open System
 open System.IO
 open System.Security.Cryptography
-open System.Text
-open SshBuffer
-open PublicKey
 
-module SshCertificate =
+type CertificateInfo(keyId:string, publicKeyToSign:PublicKey, caPublicKey:PublicKey, nonce:byte array) =
+    member val Nonce = nonce with get, set
+    member val PublicKeyToSign = publicKeyToSign with get
+    member val Serial = 0UL with get, set
+    member val KeyId = keyId with get, set
+    member val Principals = Seq.empty<string> with get, set
+    member val ValidAfter = DateTimeOffset.MinValue with get, set
+    member val ValidBefore = DateTimeOffset.MinValue with get, set
+    member val CriticalOptions = Seq.empty<string> with get, set
+    member val Extensions = Seq.empty<string> with get, set
+    member val CaPublicKey = caPublicKey with get
+
+    new (keyId:string, publicKeyToSign:PublicKey, caPublicKey:PublicKey) =
+        CertificateInfo(keyId, publicKeyToSign, caPublicKey, RandomNumberGenerator.GetBytes 32)
+
+type CertificateAuthority(signData:Func<Stream, byte array>) =
 
     /// User certificate is 1u: https://github.com/openssh/openssh-portable/blob/edc601707b583a2c900e49621e048c26574edd3a/ssh2.h#L179
     [<Literal>]
-    let SSH2_CERT_TYPE_USER = 1u
-
-    /// Each certificate has 32 random bytes of data that serve as a nonce to make this certificate fully unique
-    let makeNonce () =
-        RandomNumberGenerator.GetBytes 32
+    static let SSH2_CERT_TYPE_USER = 1u
 
     /// Writes a sequence of strings to a new buffer and returns the data.
-    let stringsToBuffer (s:string seq) =
+    static let stringsToBuffer (s:string seq) =
         use ms = new MemoryStream()
-        s |> Seq.iter (Encoding.UTF8.GetBytes >> appendSshBuf ms)
+        let sshBuf = SshBuffer(ms)
+        if not <| isNull s then
+            s |> Seq.iter sshBuf.AppendSshBuf
         ms.ToArray()
 
     /// Builds the certificate contents ready to sign in a MemoryStream.
-    let buildCertificateContentStream
-        (nonce:byte array option)
-        (publicKeyToSign:PublicKey)
-        (serial:uint64)
-        (keyId:string)
-        (principals:string seq)
-        (validAfter:DateTimeOffset)
-        (validBefore:DateTimeOffset)
-        (criticalOptions:string seq)
-        (extensions:string seq)
-        (caPublicKey:PublicKey)
-        =
-
+    static let buildCertificateContentStream (certInfo:CertificateInfo) =
         let keyType = SSH2_CERT_TYPE_USER
         
         let reserved = 0u |> BitConverter.GetBytes // Empty string for now (this is a size of 0).
@@ -44,47 +42,62 @@ module SshCertificate =
         // Super helpful presentation explaining these fields:
         // https://www.ietf.org/proceedings/122/slides/slides-122-sshm-openssh-certificate-format-00.pdf
         let certMs = new MemoryStream()
-        "ssh-rsa-cert-v01@openssh.com" |> Encoding.UTF8.GetBytes |> appendSshBuf certMs
-        nonce |> Option.defaultWith makeNonce |> appendSshBuf certMs
-        publicKeyToSign.Exponent |> appendSshBuf certMs
-        publicKeyToSign.Modulus |> appendSshBuf certMs
-        serial |> BitConverter.GetBytes |> Array.revIfLittleEndian |> certMs.Write // |> Array.rev |> certMs.Write
-        keyType |> BitConverter.GetBytes |> Array.revIfLittleEndian |> certMs.Write
-        keyId |> (System.Text.Encoding.UTF8.GetBytes >> appendSshBuf certMs)
-        principals |> stringsToBuffer |> appendSshBuf certMs
-        validAfter.ToUnixTimeSeconds() |> BitConverter.GetBytes |> Array.revIfLittleEndian |> certMs.Write
-        validBefore.ToUnixTimeSeconds() |> BitConverter.GetBytes |> Array.revIfLittleEndian |> certMs.Write
-        criticalOptions |> stringsToBuffer |> appendSshBuf certMs
-        extensions |> stringsToBuffer |> appendSshBuf certMs
-        reserved |> certMs.Write
-        caPublicKey |> toSshPublicKeyBytes |> appendSshBuf certMs
+        let certSshBuf = SshBuffer(certMs)
+        "ssh-rsa-cert-v01@openssh.com" |> certSshBuf.AppendSshBuf
+        certInfo.Nonce |> certSshBuf.AppendSshBuf
+        certInfo.PublicKeyToSign.Exponent |> certSshBuf.AppendSshBuf
+        certInfo.PublicKeyToSign.Modulus |> certSshBuf.AppendSshBuf
+        certInfo.Serial |> certSshBuf.AppendSshBuf
+        keyType |> certSshBuf.AppendSshBuf
+        certInfo.KeyId |> certSshBuf.AppendSshBuf
+        certInfo.Principals |> stringsToBuffer |> certSshBuf.AppendSshBuf
+        certInfo.ValidAfter.ToUnixTimeSeconds() |> certSshBuf.AppendSshBuf
+        certInfo.ValidBefore.ToUnixTimeSeconds() |> certSshBuf.AppendSshBuf
+        certInfo.CriticalOptions |> stringsToBuffer |> certSshBuf.AppendSshBuf
+        certInfo.Extensions |> stringsToBuffer |> certSshBuf.AppendSshBuf
+        reserved |> certSshBuf.AppendSshBufRaw
+        certInfo.CaPublicKey |> PublicKey.ToSshPublicKeyBytes |> certSshBuf.AppendSshBuf
         certMs
 
     /// Signs the certificate content and returns that signature. The memory stream containing
     /// the certificate content will be at the same position after signing.
-    let sign (signData:MemoryStream -> byte array) (certContents:MemoryStream) =
+    static let sign (signData:Stream -> byte array) (certContents:MemoryStream) =
         use dataToSign = new MemoryStream()
         certContents.Position <- 0L
         certContents.CopyTo(dataToSign)
         // Have to set the position to the beginning before signing or it will produce and invalid signature.
         dataToSign.Position <- 0
-        //let data = dataToSign.ToArray()
         dataToSign |> signData
 
     /// Appends the signature to the certificate content stream.
-    let appendSignature (certContents:Stream) (signature:byte array) =
+    static let appendSignature (certContents:Stream) (signature:byte array) =
         using (new MemoryStream()) (fun ms ->
-            "rsa-sha2-512" |> (Encoding.UTF8.GetBytes >> appendSshBuf ms)
-            signature |> appendSshBuf ms
+            let sshBuf = SshBuffer(ms)
+            "rsa-sha2-512" |> sshBuf.AppendSshBuf
+            signature |> sshBuf.AppendSshBuf
             // Append the whole thing as a string for the signature blob
-            ms.ToArray() |> appendSshBuf certContents
+            ms.ToArray() |> SshBuffer(certContents).AppendSshBuf
         )
 
     /// Writes the certificate contents to a byte array.
-    let getCertificateBytes(certContents:MemoryStream) =
+    static let getCertificateBytes(certContents:MemoryStream) =
         certContents.ToArray()
 
-    /// Writes the certificate to ssh format.
-    let toSshFormat (comment:string) (certBytes:byte array) =
+    /// Builds and signs and SSH certificate, returning the certificate contents.
+    member _.Sign(certInfo:CertificateInfo) =
+        if certInfo.Nonce.Length <> 32 then
+            failwith "Nonce must be 32 bytes."
+        use ms = buildCertificateContentStream(certInfo)
+        ms
+        |> sign signData.Invoke
+        |> appendSignature ms
+        getCertificateBytes ms
+
+    /// Builds and signs an SSH certificate, returning the contents in OpenSSH serialized format.
+    member this.SignAndSerialize (certInfo:CertificateInfo, comment:string) =
+        let certBytes = certInfo |> this.Sign
         let b64Cert = certBytes |> Convert.ToBase64String
-        String.Format("ssh-rsa-cert-v01@openssh.com {0} {1}", b64Cert, comment).TrimEnd()
+        if String.IsNullOrWhiteSpace comment then
+            String.Format("ssh-rsa-cert-v01@openssh.com {0}", b64Cert)
+        else
+            String.Format("ssh-rsa-cert-v01@openssh.com {0} {1}", b64Cert, comment)
