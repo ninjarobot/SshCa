@@ -9,8 +9,8 @@
     <ItemGroup>
         <Compile Include="TestData.fs" />
         <Compile Include="SshBufferTests.fs" />
-        <Compile Include="PublicKeyTests.fs" />
         <Compile Include="SshCertTests.fs" />
+        <Compile Include="PublicKeyTests.fs" />
         <Compile Include="Main.fs" />
     </ItemGroup>
     
