@@ -129,13 +129,13 @@ type PublicKey(algorithm:string, exponent:byte array, modulus:byte array, commen
             String.Format(
                 "{0} {1}",
                 pubKey.Algorithm,
-                (Convert.ToBase64String pkBytes)
+                Convert.ToBase64String pkBytes
             )
         else
             String.Format(
                 "{0} {1} {2}",
                 pubKey.Algorithm,
-                (Convert.ToBase64String pkBytes),
+                Convert.ToBase64String pkBytes,
                 pubKey.Comment
             )
 

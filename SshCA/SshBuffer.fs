@@ -4,10 +4,10 @@ open System
 open System.IO
 open System.Text
 
-module Array =
+type internal Array =
     /// Reverses an array when running on a Little Endian architecture.
     /// For efficiency, this does not return a new array like `Array.rev` would.
-    let revIfLittleEndian arr =
+    static member revIfLittleEndian arr =
         if BitConverter.IsLittleEndian then
             Array.Reverse arr
         arr
