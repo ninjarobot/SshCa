@@ -1,6 +1,6 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "SshCA", "SshCA\SshCA.fsproj", "{1FB01F71-8C6D-4381-8342-8534A4EF60D2}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SshCA", "SshCA\SshCA.csproj", "{1FB01F71-8C6D-4381-8342-8534A4EF60D2}"
 EndProject
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "SshCATests", "SshCATests\SshCATests.fsproj", "{518453FF-8492-4FFD-B799-5CF03DDDE7A1}"
 EndProject
