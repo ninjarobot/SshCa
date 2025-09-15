@@ -1,13 +1,12 @@
-name: dotnet build and test
+name: dotnet pack and publish
 
 on:
-  push:
-    branches: [ main ]
-  pull_request:
+  release:
+    types: [ released ]
     branches: [ main ]
 
 jobs:
-  build:
+  publish:
 
     runs-on: ubuntu-latest
 
@@ -20,6 +19,10 @@ jobs:
       - name: Restore dependencies
         run: dotnet restore
       - name: Build
-        run: dotnet build -warnaserror --no-restore
+        run: VERSION=${GITHUB_REF##*/} dotnet build -warnaserror --no-restore
       - name: Test
         run: dotnet run --no-build --project SshCATests/SshCATests.fsproj --summary
+      - name: Pack
+        run: VERSION=${GITHUB_REF##*/} dotnet pack -o . -c Release
+      - name: Publish
+        run: dotnet nuget push SshCA.*.nupkg -s https://nuget.org -k ${{ secrets.NUGET_API_KEY }}
