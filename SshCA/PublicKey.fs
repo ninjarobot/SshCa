@@ -86,9 +86,9 @@ type PublicKey(algorithm:string, exponent:byte array, modulus:byte array, commen
             let data = b64data |> Convert.FromBase64String
             use ms = new MemoryStream(data)
             let sshBuf = SshBuffer(ms)
-            let alg = sshBuf.ReadSshBuf() |> Encoding.UTF8.GetString
-            let e = sshBuf.ReadSshBuf()
-            let n = sshBuf.ReadSshBuf()
+            let alg = sshBuf.ReadSshData() |> Encoding.UTF8.GetString
+            let e = sshBuf.ReadSshData()
+            let n = sshBuf.ReadSshData()
             if sections.Length > 2 then PublicKey(alg, e, n, sections[2]) // key comment.
             else PublicKey(alg, e, n)
         else
@@ -107,9 +107,9 @@ type PublicKey(algorithm:string, exponent:byte array, modulus:byte array, commen
     static member ToSshPublicKeyBytes (pubKey:PublicKey) =
         using (new MemoryStream()) (fun ms ->
             let sshBuf = SshBuffer(ms)
-            pubKey.Algorithm |> (Encoding.UTF8.GetBytes >> sshBuf.AppendSshBuf)
-            pubKey.Exponent |> sshBuf.AppendSshBuf
-            pubKey.Modulus |> sshBuf.AppendSshBuf
+            pubKey.Algorithm |> (Encoding.UTF8.GetBytes >> sshBuf.WriteSshData)
+            pubKey.Exponent |> sshBuf.WriteSshData
+            pubKey.Modulus |> sshBuf.WriteSshData
             ms.ToArray()
         )
 

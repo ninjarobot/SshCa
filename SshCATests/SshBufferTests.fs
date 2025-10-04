@@ -14,7 +14,7 @@ let tests =
             let testData = "some test data" |> Encoding.UTF8.GetBytes
             let dataLen = testData.Length
             let sshBuf = SshBuffer(ms)
-            testData |> sshBuf.AppendSshBuf
+            testData |> sshBuf.WriteSshData
             ms.Position <- 0 // Move to beginning so we can read what was put in it.
             let size = Array.zeroCreate<byte> 4
             ms.Read size |> ignore
