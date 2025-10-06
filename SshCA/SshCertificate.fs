@@ -4,6 +4,7 @@ open System
 open System.IO
 open System.Security.Cryptography
 
+[<AllowNullLiteral>]
 type CertificateInfo(keyId:string, publicKeyToSign:PublicKey, caPublicKey:PublicKey, nonce:byte array) =
     member val Nonce = nonce with get, set
     member val PublicKeyToSign = publicKeyToSign with get
@@ -19,6 +20,7 @@ type CertificateInfo(keyId:string, publicKeyToSign:PublicKey, caPublicKey:Public
     new (keyId:string, publicKeyToSign:PublicKey, caPublicKey:PublicKey) =
         CertificateInfo(keyId, publicKeyToSign, caPublicKey, RandomNumberGenerator.GetBytes 32)
 
+[<Sealed>]
 type CertificateAuthority(signData:Func<Stream, byte array>) =
 
     /// User certificate is 1u: https://github.com/openssh/openssh-portable/blob/edc601707b583a2c900e49621e048c26574edd3a/ssh2.h#L179
@@ -70,13 +72,12 @@ type CertificateAuthority(signData:Func<Stream, byte array>) =
 
     /// Appends the signature to the certificate content stream.
     static let appendSignature (certContents:Stream) (signature:byte array) =
-        using (new MemoryStream()) (fun ms ->
-            let sshBuf = SshBuffer(ms)
-            "rsa-sha2-512" |> sshBuf.WriteSshString
-            signature |> sshBuf.WriteSshData
-            // Append the whole thing as a string for the signature blob
-            ms.ToArray() |> SshBuffer(certContents).WriteSshData
-        )
+        use ms = new MemoryStream()
+        let sshBuf = SshBuffer(ms)
+        "rsa-sha2-512" |> sshBuf.WriteSshString
+        signature |> sshBuf.WriteSshData
+        // Append the whole thing as a string for the signature blob
+        ms.ToArray() |> SshBuffer(certContents).WriteSshData
 
     /// Writes the certificate contents to a byte array.
     static let getCertificateBytes(certContents:MemoryStream) =
@@ -84,8 +85,10 @@ type CertificateAuthority(signData:Func<Stream, byte array>) =
 
     /// Builds and signs and SSH certificate, returning the certificate contents.
     member _.Sign(certInfo:CertificateInfo) =
+        if isNull certInfo then
+            nullArg "certInfo"
         if certInfo.Nonce.Length <> 32 then
-            failwith "Nonce must be 32 bytes."
+            invalidArg "certInfo.Nonce" "Nonce must be 32 bytes."
         use ms = buildCertificateContentStream(certInfo)
         ms
         |> sign signData.Invoke
@@ -94,6 +97,8 @@ type CertificateAuthority(signData:Func<Stream, byte array>) =
 
     /// Builds and signs an SSH certificate, returning the contents in OpenSSH serialized format.
     member this.SignAndSerialize (certInfo:CertificateInfo, comment:string) =
+        if isNull certInfo then
+            nullArg "certInfo"
         let certBytes = certInfo |> this.Sign
         let b64Cert = certBytes |> Convert.ToBase64String
         if String.IsNullOrWhiteSpace comment then
