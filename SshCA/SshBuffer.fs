@@ -28,7 +28,10 @@ type SshBuffer(stream:Stream) =
     ///
     /// This function ensures compatibility with OpenSSH's use of big-endian network byte order.
     member this.WriteSshString (value:string) =
-        value |> (Encoding.UTF8.GetBytes >> this.WriteSshData)
+        if isNull value then
+            [||] |> this.WriteSshData
+        else
+            value |> (Encoding.UTF8.GetBytes >> this.WriteSshData)
     /// Writes the given value to the SSH buffer. The value can be of various types, including
     /// byte array, string, int64, uint64, or uint32. The buffer first encodes the length of the value
     /// as a 32-bit integer (if applicable) and writes it in big-endian format, followed by the
