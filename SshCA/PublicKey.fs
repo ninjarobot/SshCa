@@ -66,8 +66,8 @@ type PublicKey(algorithm:string, comment:string) =
 /// public key information, including the algorithm, public key components, and an
 /// optional comment. It provides functionality for parsing keys from strings
 /// and converting keys to their SSH public key representation.
-type RsaPublicKey(algorithm:string, exponent:byte array, modulus:byte array, comment:string) =
-    inherit PublicKey(algorithm, comment)
+type RsaPublicKey(exponent:byte array, modulus:byte array, comment:string) =
+    inherit PublicKey(RsaPublicKey.SshRsa, comment)
     /// Represents the identifier for the RSA algorithm in the context
     /// of SSH public key operations. The value is a literal string
     /// "ssh-rsa", which is used to specify the RSA algorithm type in
@@ -93,7 +93,7 @@ type RsaPublicKey(algorithm:string, exponent:byte array, modulus:byte array, com
     /// - Exponent: The public exponent of the RSA key.
     /// - Modulus: The modulus of the RSA key.
     /// - Comment: An optional comment associated with the public key.
-    new(algorithm, exponent, modulus) = RsaPublicKey(algorithm, exponent, modulus, null)
+    new(exponent, modulus) = RsaPublicKey(exponent, modulus, null)
 
     override this.WritePublicKeyComponents (sshBuf:SshBuffer) =
         this.Exponent |> sshBuf.WriteSshData
@@ -135,8 +135,8 @@ type PublicKey with
             let alg = sshBuf.ReadSshData() |> Encoding.UTF8.GetString
             let e = sshBuf.ReadSshData()
             let n = sshBuf.ReadSshData()
-            if sections.Length > 2 then RsaPublicKey(alg, e, n, sections[2]) // key comment.
-            else RsaPublicKey(alg, e, n)
+            if sections.Length > 2 then RsaPublicKey(e, n, sections[2]) // key comment.
+            else RsaPublicKey(e, n)
         else
             failwith "Malformed key line"
 
@@ -178,7 +178,7 @@ type PublicKey with
                 0uy
                 yield! exported.Modulus
             } |> Array.ofSeq
-        RsaPublicKey(RsaPublicKey.SshRsa, exported.Exponent, forcePosMod)
+        RsaPublicKey(exported.Exponent, forcePosMod)
 
     /// Converts a `PublicKey` to an RSA public key represented as an `RSA` object.
     /// This function uses the `Exponent` and `Modulus` properties of the given `PublicKey`
