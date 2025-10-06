@@ -99,6 +99,28 @@ type RsaPublicKey(exponent:byte array, modulus:byte array, comment:string) =
         this.Exponent |> sshBuf.WriteSshData
         this.Modulus |> sshBuf.WriteSshData
 
+    interface IEquatable<RsaPublicKey> with
+        member this.Equals (other: RsaPublicKey) =
+            this.Algorithm = other.Algorithm &&
+            System.Collections.StructuralComparisons.StructuralEqualityComparer.Equals(this.Exponent, other.Exponent) &&
+            System.Collections.StructuralComparisons.StructuralEqualityComparer.Equals(this.Modulus, other.Modulus) &&
+            this.Comment = other.Comment
+
+    override this.Equals(other) =
+        if Object.ReferenceEquals(this,other) then true
+        else
+            match other with
+            | :? RsaPublicKey as otherPubKey ->
+                (this :> IEquatable<RsaPublicKey>).Equals otherPubKey
+            | _ -> false
+
+    override this.GetHashCode() =
+        HashCode.Combine(
+            RsaPublicKey.SshRsa,
+            (exponent :> System.Collections.IStructuralEquatable).GetHashCode(System.Collections.Generic.EqualityComparer<byte>.Default),
+            (modulus :> System.Collections.IStructuralEquatable).GetHashCode(System.Collections.Generic.EqualityComparer<byte>.Default),
+            comment)
+
 type PublicKey with
     /// Parses an SSH public key from its string representation.
     ///
