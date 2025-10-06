@@ -30,6 +30,21 @@ let tests =
                 "user@domain.local"
                 "Incorrect comment"
         }
+        test "Parse OpenSSH Public Key - Long Comment" {
+            let publicKey = testSshKeyWithLongComment |> PublicKey.OfSshPublicKey
+            Expect.equal
+                (publicKey.Exponent |> Convert.ToHexString)
+                "010001"
+                "Incorrect exponent"
+            Expect.equal // Modulus from RSA will not have 0 (NULL) byte at the beginning that the ssh key does.
+                (publicKey.Modulus |> Convert.ToHexString)
+                "00D233CA5C8CFE24294C63F82434E49D0D2F47992A1DBB59D41123100A178B17546327EE2145B79208764EA63B5305EA06DE52CB96CB68F6B6624CC385865A15FF36D8D0C5F814904A9257651AA1291097395E20B462DDBFDBBACC74C7113956BD577058A63879750638522A88CC6B46AAC3D121CFB44DAA042669F2C7B199922C695759044F31EA74B385FFC3646CB57249FA1F0F8736DA8CF0F3558E790E21BB5DD3BBC1AC4845E175A751020E48DC8D58B9B2A8F48E99E2D1299D14CEBD86CAC87D31A16CC83EF5FFAC15DBEC92452D1BAC4F393EC61E5F856582D0E139C00D6433FE90EF4526AB8370A59880BDFD8D3488125970334356B939B68E536EEFAC4002656195B2E8E692D02AC05321C52F564105614E77C7616ADAF498933E88DACB42C400E9D6862A600F05227621C8A4882A5CA89D7BF517DF39B3A3EFD58F6E999632B5B9798AA2F0AB2CA99A8E2B5E520D0B603A7386CA7071647C61DD0D87C2F681156EAF05DA94865F3B116B30EF116A9564AE292C6323B18CDC547074EF"
+                "Incorrect modulus"
+            Expect.equal
+                publicKey.Comment
+                "user@domain.local comment can be many words"
+                "Incorrect comment"
+        }
         test "Parse PEM Public Key File" {
             let publicKey = testSshKeyPem |> PublicKey.OfRsaPublicKeyPem
             Expect.equal

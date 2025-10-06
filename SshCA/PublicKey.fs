@@ -147,7 +147,12 @@ type PublicKey with
     /// Assumptions:
     /// - The key string follows the standard SSH public key format.
     static member OfSshPublicKey (keyLine:string) =
-        let sections = keyLine.Split ([|' ';'\t'|], StringSplitOptions.RemoveEmptyEntries)
+        if String.IsNullOrEmpty keyLine then
+            invalidArg "keyLine" "Empty OpenSSH public key passed."
+        // Plain SSH key line is ~400 characters, so 10,000 is a sane maximum.
+        if keyLine.Length > 10_000 then
+            raise (FormatException "Oversized OpenSSH public key line")            
+        let sections = keyLine.Split ([|' '|], StringSplitOptions.RemoveEmptyEntries)
         if sections.Length > 1 then
             let algName = sections[0]
             let b64data = sections[1]
@@ -157,10 +162,12 @@ type PublicKey with
             let alg = sshBuf.ReadSshData() |> Encoding.UTF8.GetString
             let e = sshBuf.ReadSshData()
             let n = sshBuf.ReadSshData()
-            if sections.Length > 2 then RsaPublicKey(e, n, sections[2]) // key comment.
-            else RsaPublicKey(e, n)
+            if sections.Length > 2 then
+                RsaPublicKey(e, n, String.Join(' ', sections[2..])) // key comment.
+            else
+                RsaPublicKey(e, n)
         else
-            failwith "Malformed key line"
+            raise (FormatException "Malformed OpenSSH public key line.")
 
     /// Converts a `PublicKey` instance into its SSH public key string representation.
     ///
@@ -189,6 +196,8 @@ type PublicKey with
     /// - Modulus: The modulus of the RSA key, adjusted to a positive MSB if required.
     /// - Comment: An optional comment field, which defaults to None.
     static member OfRsaPublicKeyPem (pem:string) =
+        if String.IsNullOrEmpty pem then
+            invalidArg "pem" "Empty RSA public key PEM passed."
         use rsa = RSA.Create()
         rsa.ImportFromPem(pem)
         let exported = rsa.ExportParameters(false)
