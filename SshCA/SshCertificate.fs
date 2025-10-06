@@ -45,8 +45,7 @@ type CertificateAuthority(signData:Func<Stream, byte array>) =
         let certSshBuf = SshBuffer(certMs)
         "ssh-rsa-cert-v01@openssh.com" |> certSshBuf.WriteSshString
         certInfo.Nonce |> certSshBuf.WriteSshData
-        certInfo.PublicKeyToSign.Exponent |> certSshBuf.WriteSshData
-        certInfo.PublicKeyToSign.Modulus |> certSshBuf.WriteSshData
+        certInfo.PublicKeyToSign.WritePublicKeyComponents certSshBuf
         certInfo.Serial |> certSshBuf.WriteSshData
         keyType |> certSshBuf.WriteSshData
         certInfo.KeyId |> certSshBuf.WriteSshString
@@ -56,7 +55,7 @@ type CertificateAuthority(signData:Func<Stream, byte array>) =
         certInfo.CriticalOptions |> stringsToBuffer |> certSshBuf.WriteSshData
         certInfo.Extensions |> stringsToBuffer |> certSshBuf.WriteSshData
         reserved |> certSshBuf.WriteSshData
-        certInfo.CaPublicKey |> PublicKey.ToSshPublicKeyBytes |> certSshBuf.WriteSshData
+        certInfo.CaPublicKey.AsSshPublicKeyBytes |> certSshBuf.WriteSshData
         certMs
 
     /// Signs the certificate content and returns that signature. The memory stream containing
