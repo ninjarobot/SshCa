@@ -41,15 +41,14 @@ var keyClient = new KeyClient(new Uri("https://mykeyvault.vault.azure.net"), cre
 var caRsaPubKey = keyClient.GetKey("ssh-signing-key");
 
 // Convert the CA public key to OpenSSH format.
-string caPubKeyPem = null;
 SshCA.PublicKey caPubKey = null;
 string caPubKeySsh = null;
 using (var rsa = caRsaPubKey.Value.Key.ToRSA()) {
-    caPubKeyPem = rsa.ExportRSAPublicKeyPem();
+    var caPubKeyPem = rsa.ExportRSAPublicKeyPem();
     caPubKey = SshCA.PublicKey.OfRsaPublicKeyPem(caPubKeyPem);
     caPubKeySsh = SshCA.PublicKey.ToSshPublicKey(caPubKey);
 }
-// Note: the OpenSSH formatted key should be added to a file and
+// Note: the OpenSSH formatted key `caPubKeySsh` should be added to a file and
 // that file's path set in the TrustedUserCAKeys in your sshd_config.
 
 // Create certificate information. The key_id is going to show in the SSH logs when you use this certificate.
