@@ -196,10 +196,12 @@ type PublicKey with
         // It does allow a prepended '\0' (NULL) that will force the MSB to be positive. It then trims this
         // NULL so it becomes the same modulus as before. Using that same technique here.
         let forcePosMod =
-            seq {
-                0uy
-                yield! exported.Modulus
-            } |> Array.ofSeq
+            if (exported.Modulus[0] &&& 128uy) <> 0uy then
+                seq {
+                    0uy
+                    yield! exported.Modulus
+                } |> Array.ofSeq
+            else exported.Modulus
         RsaPublicKey(exported.Exponent, forcePosMod)
 
     /// Converts a `PublicKey` to an RSA public key represented as an `RSA` object.
