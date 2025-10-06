@@ -1,6 +1,7 @@
 module PublicKeyTests
 
 open System
+open System.Security.Cryptography
 open Expecto
 open SshCA
 open TestData
@@ -40,7 +41,16 @@ let tests =
                 $"Incorrect modulus"
         }
         test "RSA to OpenSSH" {
-            Expect.isTrue true ""
+            let exponent = Convert.FromHexString "010001"
+            let modulus = Convert.FromHexString "9CBFEA68EE2BAE92903BCD8296718E680C4D34928E05C3EB185861BBAA051E57523399FB443EBC04F963A53A623B42959BD1E6F06DFA240C12BEC0EECBF5C4953DFA7F016F46271C1C127353F6E3D314A25176819EFFB581DDB6D559908EABFD1CC95709FCEA28C213C7202DD506924A1E57C4F20F08B15FEB1A20B0B78F1066223A1AE5C60C539B824A52DF2C5364EAD4E0780D646EDA78012C9B7E0E10EFA6DA9AC9CC86044C0110232B795C5BD8E36E83607611B572E468A19888A1A65278F90BDD820BE29982EDD53560569F34AB946A92A131C1F9248CB3FD3FCD8B4C2AAF69951930902579DED1A8E1143BEFB2047638D9A7B1F3AA72A41070F297337F"
+            let parameters = RSAParameters(Exponent=exponent, Modulus=modulus)
+            use rsa = RSA.Create(parameters)
+            let publicKey = rsa.ExportRSAPublicKeyPem() |> PublicKey.OfRsaPublicKeyPem
+            let sshKey = publicKey |> PublicKey.ToSshPublicKey
+            Expect.equal
+                sshKey
+                "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCcv+po7iuukpA7zYKWcY5oDE00ko4Fw+sYWGG7qgUeV1IzmftEPrwE+WOlOmI7QpWb0ebwbfokDBK+wO7L9cSVPfp/AW9GJxwcEnNT9uPTFKJRdoGe/7WB3bbVWZCOq/0cyVcJ/OoowhPHIC3VBpJKHlfE8g8IsV/rGiCwt48QZiI6GuXGDFObgkpS3yxTZOrU4HgNZG7aeAEsm34OEO+m2prJzIYETAEQIyt5XFvY426DYHYRtXLkaKGYiKGmUnj5C92CC+KZgu3VNWBWnzSrlGqSoTHB+SSMs/0/zYtMKq9plRkwkCV53tGo4RQ777IEdjjZp7HzqnKkEHDylzN/"
+                "Generated SSH key did not match expected."
         }
         test "OpenSSH to RSA" {
             let publicKey = PublicKey.OfSshPublicKey testSshKey
