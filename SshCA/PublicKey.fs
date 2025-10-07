@@ -179,7 +179,7 @@ type PublicKey with
     ///
     /// Returns:
     ///   A string in the SSH public key format.
-    static member ToSshPublicKey (pubKey:RsaPublicKey) =
+    static member ToSshPublicKey (pubKey:PublicKey) =
         pubKey.AsSshPublicKey
 
     /// Converts a PEM-encoded RSA public key string to an internal representation
@@ -224,5 +224,8 @@ type PublicKey with
     ///
     /// Returns:
     ///   An `RSA` object initialized with the specified public key parameters.
-    static member ToRsaPublicKey (pubKey:RsaPublicKey) =
-        RSA.Create(RSAParameters(Exponent=pubKey.Exponent, Modulus=pubKey.Modulus))
+    static member ToRsaPublicKey (pubKey:PublicKey) =
+        match pubKey with
+        | :? RsaPublicKey as rsaPublicKey ->
+            RSA.Create(RSAParameters(Exponent=rsaPublicKey.Exponent, Modulus=rsaPublicKey.Modulus))
+        | _ -> invalidOp (String.Format ("Cannot convert {0} public key to RSA.", pubKey.Algorithm))
