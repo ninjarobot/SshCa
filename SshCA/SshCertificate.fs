@@ -20,15 +20,12 @@ type CertificateInfo(keyId:string, publicKeyToSign:PublicKey, caPublicKey:Public
     new (keyId:string, publicKeyToSign:PublicKey, caPublicKey:PublicKey) =
         CertificateInfo(keyId, publicKeyToSign, caPublicKey, RandomNumberGenerator.GetBytes 32)
 
-[<Sealed>]
-type CertificateAuthority(signData:Func<Stream, byte array>) =
-
+module private CertificateSigning =
     /// User certificate is 1u: https://github.com/openssh/openssh-portable/blob/edc601707b583a2c900e49621e048c26574edd3a/ssh2.h#L179
-    [<Literal>]
-    static let SSH2_CERT_TYPE_USER = 1u
+    let SSH2_CERT_TYPE_USER = 1u
 
     /// Writes a sequence of strings to a new buffer and returns the data.
-    static let stringsToBuffer (s:string seq) =
+    let stringsToBuffer (s:string seq) =
         use ms = new MemoryStream()
         let sshBuf = SshBuffer(ms)
         if not <| isNull s then
@@ -36,7 +33,7 @@ type CertificateAuthority(signData:Func<Stream, byte array>) =
         ms.ToArray()
 
     /// Builds the certificate contents ready to sign in a MemoryStream.
-    static let buildCertificateContentStream (certInfo:CertificateInfo) =
+    let buildCertificateContentStream (certInfo:CertificateInfo) =
         let keyType = SSH2_CERT_TYPE_USER
         
         let reserved = 0u |> BitConverter.GetBytes // Empty string for now (this is a size of 0).
@@ -62,7 +59,7 @@ type CertificateAuthority(signData:Func<Stream, byte array>) =
 
     /// Signs the certificate content and returns that signature. The memory stream containing
     /// the certificate content will be at the same position after signing.
-    static let sign (signData:Stream -> byte array) (certContents:MemoryStream) =
+    let sign (signData:Stream -> byte array) (certContents:MemoryStream) =
         use dataToSign = new MemoryStream()
         certContents.Position <- 0L
         certContents.CopyTo(dataToSign)
@@ -70,8 +67,16 @@ type CertificateAuthority(signData:Func<Stream, byte array>) =
         dataToSign.Position <- 0
         dataToSign |> signData
 
+    let signAsync (signData:Func<Stream, System.Threading.CancellationToken, System.Threading.Tasks.Task<byte array>>) (cancellationToken:System.Threading.CancellationToken) (certContents:MemoryStream) =
+        use dataToSign = new MemoryStream()
+        certContents.Position <- 0L
+        certContents.CopyTo(dataToSign)
+        // Have to set the position to the beginning before signing or it will produce and invalid signature.
+        dataToSign.Position <- 0
+        signData.Invoke(dataToSign, cancellationToken)
+
     /// Appends the signature to the certificate content stream.
-    static let appendSignature (certContents:Stream) (signature:byte array) =
+    let appendSignature (certContents:Stream) (signature:byte array) =
         use ms = new MemoryStream()
         let sshBuf = SshBuffer(ms)
         "rsa-sha2-512" |> sshBuf.WriteSshString
@@ -80,8 +85,11 @@ type CertificateAuthority(signData:Func<Stream, byte array>) =
         ms.ToArray() |> SshBuffer(certContents).WriteSshData
 
     /// Writes the certificate contents to a byte array.
-    static let getCertificateBytes(certContents:MemoryStream) =
+    let getCertificateBytes(certContents:MemoryStream) =
         certContents.ToArray()
+
+[<Sealed>]
+type CertificateAuthority(signData:Func<Stream, byte array>) =
 
     /// Builds and signs and SSH certificate, returning the certificate contents.
     member _.Sign(certInfo:CertificateInfo) =
@@ -89,11 +97,11 @@ type CertificateAuthority(signData:Func<Stream, byte array>) =
             nullArg "certInfo"
         if certInfo.Nonce.Length <> 32 then
             invalidArg "certInfo.Nonce" "Nonce must be 32 bytes."
-        use ms = buildCertificateContentStream(certInfo)
+        use ms = CertificateSigning.buildCertificateContentStream(certInfo)
         ms
-        |> sign signData.Invoke
-        |> appendSignature ms
-        getCertificateBytes ms
+        |> CertificateSigning.sign signData.Invoke
+        |> CertificateSigning.appendSignature ms
+        CertificateSigning.getCertificateBytes ms
 
     /// Builds and signs an SSH certificate, returning the contents in OpenSSH serialized format.
     member this.SignAndSerialize (certInfo:CertificateInfo, comment:string) =
@@ -105,3 +113,35 @@ type CertificateAuthority(signData:Func<Stream, byte array>) =
             String.Format("ssh-rsa-cert-v01@openssh.com {0}", b64Cert)
         else
             String.Format("ssh-rsa-cert-v01@openssh.com {0} {1}", b64Cert, comment)
+
+[<Sealed>]
+type CertificateAuthorityAsync(signDataAsync:Func<Stream, System.Threading.CancellationToken, System.Threading.Tasks.Task<byte array>>) =
+    member _.SignAsync(certInfo:CertificateInfo, cancellationToken:System.Threading.CancellationToken) =
+        if isNull certInfo then
+            nullArg "certInfo"
+        if certInfo.Nonce.Length <> 32 then
+            invalidArg "certInfo.Nonce" "Nonce must be 32 bytes."
+        backgroundTask {
+            use ms = CertificateSigning.buildCertificateContentStream(certInfo)
+            let! signature =
+                ms
+                |> CertificateSigning.signAsync signDataAsync cancellationToken
+            signature |> CertificateSigning.appendSignature ms
+            return CertificateSigning.getCertificateBytes ms
+        }
+
+    member this.SignAsync(certInfo:CertificateInfo) =
+        this.SignAsync(certInfo, System.Threading.CancellationToken.None)
+
+    member this.SignAndSerializeAsync (certInfo:CertificateInfo, comment:string) =
+        backgroundTask {
+            if isNull certInfo then
+                nullArg "certInfo"
+            let! certBytes = certInfo |> this.SignAsync
+            let b64Cert = certBytes |> Convert.ToBase64String
+            return
+                if String.IsNullOrWhiteSpace comment then
+                    String.Format("ssh-rsa-cert-v01@openssh.com {0}", b64Cert)
+                else
+                    String.Format("ssh-rsa-cert-v01@openssh.com {0} {1}", b64Cert, comment)
+        }

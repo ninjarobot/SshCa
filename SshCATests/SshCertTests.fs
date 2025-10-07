@@ -68,4 +68,31 @@ let tests =
                 "Extensions: (none)"
                 "Certification validation extensions incorrect"
         }
+        testTask "CA with async signing function" {
+            let ca = RSA.Create()
+            let caPubKey = ca.ExportRSAPublicKeyPem() |> PublicKey.OfRsaPublicKeyPem
+            let pubKeyToSign = TestData.testSshKey |> PublicKey.OfSshPublicKey
+            let certInfo =
+                CertificateInfo("testkey", pubKeyToSign, caPubKey,
+                                TestData.nonce,
+                                Serial=0UL, Principals=["someUser"],
+                                ValidAfter=DateTimeOffset(DateTime(2025, 6, 13, 8, 0, 0)),
+                                ValidBefore=DateTimeOffset(DateTime(2025, 6, 13, 8, 0, 0)).AddHours 2
+                )
+            let asyncSigner =
+                fun (stream:Stream) (_:System.Threading.CancellationToken) ->
+                    backgroundTask {
+                        return ca.SignData(stream, HashAlgorithmName.SHA512, RSASignaturePadding.Pkcs1)
+                    }
+            let certAuth = CertificateAuthorityAsync(asyncSigner)
+            let! (certLine:string) = certAuth.SignAndSerializeAsync(certInfo, "testkey@domain")
+            let tempFile = Path.GetTempFileName()
+            File.WriteAllText(tempFile, certLine)
+            let cmdResult =
+                cli {
+                    Exec "/usr/bin/ssh-keygen"
+                    Arguments $"-L -f {tempFile}"
+                } |> Command.execute
+            cmdResult |> Output.throwIfErrored |> ignore
+        }
     ]
