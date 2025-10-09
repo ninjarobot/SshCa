@@ -23,6 +23,9 @@ type CertificateInfo(keyId:string, publicKeyToSign:PublicKey, caPublicKey:Public
 module private CertificateSigning =
     /// User certificate is 1u: https://github.com/openssh/openssh-portable/blob/edc601707b583a2c900e49621e048c26574edd3a/ssh2.h#L179
     let SSH2_CERT_TYPE_USER = 1u
+    
+    /// Certificate signing algorithm is SHA-512.
+    let RSA_SHA_512_CERT_ALG = "rsa-sha2-512-cert-v01@openssh.com"
 
     /// Writes a sequence of strings to a new buffer and returns the data.
     let stringsToBuffer (s:string seq) =
@@ -42,7 +45,7 @@ module private CertificateSigning =
         // https://www.ietf.org/proceedings/122/slides/slides-122-sshm-openssh-certificate-format-00.pdf
         let certMs = new MemoryStream()
         let certSshBuf = SshBuffer(certMs)
-        "ssh-rsa-cert-v01@openssh.com" |> certSshBuf.WriteSshString
+        RSA_SHA_512_CERT_ALG |> certSshBuf.WriteSshString
         certInfo.Nonce |> certSshBuf.WriteSshData
         certInfo.PublicKeyToSign.WritePublicKeyComponents certSshBuf
         certInfo.Serial |> certSshBuf.WriteSshData
@@ -110,9 +113,9 @@ type CertificateAuthority(signData:Func<Stream, byte array>) =
         let certBytes = certInfo |> this.Sign
         let b64Cert = certBytes |> Convert.ToBase64String
         if String.IsNullOrWhiteSpace comment then
-            String.Format("ssh-rsa-cert-v01@openssh.com {0}", b64Cert)
+            String.Format("{0} {1}", CertificateSigning.RSA_SHA_512_CERT_ALG, b64Cert)
         else
-            String.Format("ssh-rsa-cert-v01@openssh.com {0} {1}", b64Cert, comment)
+            String.Format("{0} {1} {2}", CertificateSigning.RSA_SHA_512_CERT_ALG, b64Cert, comment)
 
 [<Sealed>]
 type CertificateAuthorityAsync(signDataAsync:Func<Stream, System.Threading.CancellationToken, System.Threading.Tasks.Task<byte array>>) =
@@ -141,7 +144,7 @@ type CertificateAuthorityAsync(signDataAsync:Func<Stream, System.Threading.Cance
             let b64Cert = certBytes |> Convert.ToBase64String
             return
                 if String.IsNullOrWhiteSpace comment then
-                    String.Format("ssh-rsa-cert-v01@openssh.com {0}", b64Cert)
+                    String.Format("{0} {1}", CertificateSigning.RSA_SHA_512_CERT_ALG, b64Cert)
                 else
-                    String.Format("ssh-rsa-cert-v01@openssh.com {0} {1}", b64Cert, comment)
+                    String.Format("{0} {1} {2}", CertificateSigning.RSA_SHA_512_CERT_ALG, b64Cert, comment)
         }

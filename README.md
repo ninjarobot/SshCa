@@ -14,6 +14,19 @@ See the [SshCATests](SshCATests) project for examples.
 * Write RSA public keys as OpenSSH public keys
 * Sign OpenSSH public keys with an RSA implementation such as `System.Security.Cryptography.RSA` or the one returned by `Azure.Security.KeyVault.Keys.Cryptography.CryptographyClient.CreateRSA`.
 
+### Important Information
+
+* Conversion between RSA and OpenSSH public keys always formats them as `ssh-rsa`.
+* Certificates need to be signed with SHA-512 as the signatures are always formatted as `rsa-sha2-512`.
+* Generated certificate algorithm is always `rsa-sha2-512-cert-v01@openssh.com`.
+
+
+The goal is to allow external service to sign SSH keys, so this gives some flexibility in what RSA implementation is
+used for signing (dotnet RSA, OpenSSL, external call to Azure Key Vault or AWS KMS, maybe you have an HSM). Whichever
+implementation is used, it should be signed with an RSA private key using SHA-512.
+
+Support for signing elliptic curve keys is possible in OpenSSH, but not implemented at this time.
+
 ### Usage
 
 This example uses an RSA key in Azure Key Vault to sign an SSH public key.
@@ -63,6 +76,7 @@ var cryptoClient = new CryptographyClient(new Uri("https://mykeyvault.vault.azur
 
 String signedCert = null;
 using(var rsa = cryptoClient.CreateRSA()) {
+    // Certificates must be signed with SHA-512.
     var certAuth = new CertificateAuthority(ms => rsa.SignData(ms, HashAlgorithmName.SHA512, RSASignaturePadding.Pkcs1));
     var signedCert = certAuth.SignAndSerialize(certInfo, "comment-such-as:my-account@linux-server");    
 }
