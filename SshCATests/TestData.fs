@@ -1,3 +1,20 @@
+(*
+The MIT License (MIT)
+Copyright © 2025 Dave Curylo
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated
+documentation files (the "Software"), to deal in the Software without restriction, including without limitation the
+rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit
+persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the
+Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE
+WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*)
 module TestData
 
 let testSshKey = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQDSM8pcjP4kKUxj+CQ05J0NL0eZKh27WdQRIxAKF4sXVGMn7iFFt5IIdk6mO1MF6gbeUsuWy2j2tmJMw4WGWhX/NtjQxfgUkEqSV2UaoSkQlzleILRi3b/busx0xxE5Vr1XcFimOHl1BjhSKojMa0aqw9Ehz7RNqgQmafLHsZmSLGlXWQRPMep0s4X/w2RstXJJ+h8PhzbajPDzVY55DiG7XdO7waxIReF1p1ECDkjcjVi5sqj0jpni0SmdFM69hsrIfTGhbMg+9f+sFdvskkUtG6xPOT7GHl+FZYLQ4TnADWQz/pDvRSarg3ClmIC9/Y00iBJZcDNDVrk5to5Tbu+sQAJlYZWy6OaS0CrAUyHFL1ZBBWFOd8dhatr0mJM+iNrLQsQA6daGKmAPBSJ2IcikiCpcqJ179RffObOj79WPbpmWMrW5eYqi8KssqZqOK15SDQtgOnOGynBxZHxh3Q2HwvaBFW6vBdqUhl87EWsw7xFqlWSuKSxjI7GM3FRwdO8= user@domain.local"
