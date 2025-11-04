@@ -6,7 +6,16 @@ SshCA
 
 Use SSH public key and and CA certificates to sign SSH public keys. It can be used to read and write SSH public keys, convert between dotnet RSA public keys and the OpenSSH format, and to sign OpenSSH public keys in the format used by OpenSSH.
 
-See the [SshCATests](SshCATests) project for examples.
+## 🚀 Try the Interactive Demo!
+
+Want to see SshCA in action? Check out the [SshCaDemo](SshCaDemo) project - a catchy, interactive demo that shows you how to sign SSH keys step-by-step with beautiful output! Just run:
+
+```bash
+cd SshCaDemo
+dotnet run
+```
+
+See the [SshCATests](SshCATests) project for additional examples.
 
 ### Features
 * Read OpenSSH public keys and convert them to RSA public keys
