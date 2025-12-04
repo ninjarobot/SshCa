@@ -199,8 +199,21 @@ type PublicKey with
     static member ToSshPublicKey (pubKey:PublicKey) =
         pubKey.AsSshPublicKey
 
-    /// Converts a PEM-encoded RSA public key string to an internal representation
-    /// suitable for working with SSH-compatible RSA parameters.
+    /// Converts a `PublicKey` instance into a 'cert-authority' line ready for adding to an 'authorized_keys' file.
+    ///
+    /// The output format adheres to the standard OpenSSH format:
+    /// `cert-authority <algorithm> <base64-encoded-key-bytes> <optional-comment>`.
+    ///
+    /// Parameters:
+    ///   pubKey: The `PublicKey` instance containing the algorithm, exponent, modulus, and optional comment.
+    ///
+    /// Returns:
+    ///   A cert-authhority line containing the SSH public key for use in an 'authorized_keys' file.
+    static member ToSshCertAuthority (pubKey:PublicKey) =
+        String.Concat ("cert-authority ", pubKey.AsSshPublicKey)
+
+    /// Converts a PEM-encoded RSA public key string and a comment to an internal
+    /// representation suitable for working with SSH-compatible RSA parameters.
     ///
     /// The function imports the RSA public key from a PEM-encoded string, extracts
     /// the parameters such as modulus and exponent, and applies a technique to
@@ -212,7 +225,7 @@ type PublicKey with
     /// - Exponent: The public exponent of the RSA key.
     /// - Modulus: The modulus of the RSA key, adjusted to a positive MSB if required.
     /// - Comment: An optional comment field, which defaults to None.
-    static member OfRsaPublicKeyPem (pem:string) =
+    static member OfRsaPublicKeyPem (pem:string, comment:string) =
         if String.IsNullOrEmpty pem then
             invalidArg "pem" "Empty RSA public key PEM passed."
         use rsa = RSA.Create()
@@ -228,7 +241,23 @@ type PublicKey with
                     yield! exported.Modulus
                 } |> Array.ofSeq
             else exported.Modulus
-        RsaPublicKey(exported.Exponent, forcePosMod)
+        RsaPublicKey(exported.Exponent, forcePosMod, comment)
+
+    /// Converts a PEM-encoded RSA public key string to an internal representation
+    /// suitable for working with SSH-compatible RSA parameters.
+    ///
+    /// The function imports the RSA public key from a PEM-encoded string, extracts
+    /// the parameters such as modulus and exponent, and applies a technique to
+    /// ensure the modulus is properly formatted for OpenSSH compatibility. Specifically,
+    /// it ensures the most significant bit (MSB) of the modulus is positive.
+    ///
+    /// Returns a record containing:
+    /// - Algorithm: Identifies the algorithm type (e.g., RSA).
+    /// - Exponent: The public exponent of the RSA key.
+    /// - Modulus: The modulus of the RSA key, adjusted to a positive MSB if required.
+    /// - Comment: An optional comment field, which defaults to None.
+    static member OfRsaPublicKeyPem (pem:string) =
+        PublicKey.OfRsaPublicKeyPem(pem, null)
 
     /// Converts a `PublicKey` to an RSA public key represented as an `RSA` object.
     /// This function uses the `Exponent` and `Modulus` properties of the given `PublicKey`

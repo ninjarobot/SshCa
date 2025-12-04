@@ -62,7 +62,10 @@ using (var rsa = caRsaPubKey.Value.Key.ToRSA()) {
     caPubKeySsh = SshCA.PublicKey.ToSshPublicKey(caPubKey);
 }
 // Note: the OpenSSH formatted key `caPubKeySsh` should be added to a file and
-// that file's path set in the TrustedUserCAKeys in your sshd_config.
+// that file's path set in the TrustedUserCAKeys in your sshd_config. Or you can
+// generate a cert-authority line to add to an individual authorized_keys file.
+
+var certAuthLine = PublicKey.ToSshCertAuthority(caPubKey);
 
 // Create certificate information. The key_id is going to show in the SSH logs when you use this certificate.
 var certInfo = new CertificateInfo("my-account@linux-server", pubKey, caPubKey);
