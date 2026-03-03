@@ -23,6 +23,10 @@
     </ItemGroup>
 
     <ItemGroup>
+        <PackageReference Update="FSharp.Core" PrivateAssets="all" />
+    </ItemGroup>
+
+    <ItemGroup>
         <Compile Include="SshBuffer.fs" />
         <Compile Include="PublicKey.fs" />
         <Compile Include="SshCertificate.fs" />
