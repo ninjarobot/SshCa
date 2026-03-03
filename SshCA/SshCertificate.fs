@@ -1,0 +1,168 @@
+(*
+The MIT License (MIT)
+Copyright © 2025-2026 Dave Curylo
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated
+documentation files (the "Software"), to deal in the Software without restriction, including without limitation the
+rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit
+persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the
+Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE
+WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*)
+namespace SshCA
+
+open System
+open System.IO
+open System.Security.Cryptography
+
+[<AllowNullLiteral>]
+type CertificateInfo(keyId:string, publicKeyToSign:PublicKey, caPublicKey:PublicKey, nonce:byte array) =
+    member val Nonce = nonce with get, set
+    member val PublicKeyToSign = publicKeyToSign with get
+    member val Serial = 0UL with get, set
+    member val KeyId = keyId with get, set
+    member val Principals = System.Array.Empty<string>() :> System.Collections.Generic.IEnumerable<string> with get, set
+    member val ValidAfter = DateTimeOffset.MinValue with get, set
+    member val ValidBefore = DateTimeOffset.MinValue with get, set
+    member val CriticalOptions = System.Array.Empty<string>() :> System.Collections.Generic.IEnumerable<string> with get, set
+    member val Extensions = System.Array.Empty<string>() :> System.Collections.Generic.IEnumerable<string> with get, set
+    member val CaPublicKey = caPublicKey with get
+
+    new (keyId:string, publicKeyToSign:PublicKey, caPublicKey:PublicKey) =
+        CertificateInfo(keyId, publicKeyToSign, caPublicKey, RandomNumberGenerator.GetBytes 32)
+
+module private CertificateSigning =
+    /// User certificate is 1u: https://github.com/openssh/openssh-portable/blob/edc601707b583a2c900e49621e048c26574edd3a/ssh2.h#L179
+    let SSH2_CERT_TYPE_USER = 1u
+    
+    /// Certificate signing algorithm is SHA-512.
+    let RSA_SHA_512_CERT_ALG = "rsa-sha2-512-cert-v01@openssh.com"
+
+    /// Writes a sequence of strings to a new buffer and returns the data.
+    let stringsToBuffer (s:string seq) =
+        use ms = new MemoryStream()
+        let sshBuf = SshBuffer(ms)
+        if not (obj.ReferenceEquals(s, null)) then
+            for item in s do
+                sshBuf.WriteSshString item
+        ms.ToArray()
+
+    /// Builds the certificate contents ready to sign in a MemoryStream.
+    let buildCertificateContentStream (certInfo:CertificateInfo) =
+        let keyType = SSH2_CERT_TYPE_USER
+        
+        let reserved = 0u |> BitConverter.GetBytes // Empty string for now (this is a size of 0).
+        
+        // Super helpful presentation explaining these fields:
+        // https://www.ietf.org/proceedings/122/slides/slides-122-sshm-openssh-certificate-format-00.pdf
+        let certMs = new MemoryStream()
+        let certSshBuf = SshBuffer(certMs)
+        RSA_SHA_512_CERT_ALG |> certSshBuf.WriteSshString
+        certInfo.Nonce |> certSshBuf.WriteSshData
+        certInfo.PublicKeyToSign.WritePublicKeyComponents certSshBuf
+        certInfo.Serial |> certSshBuf.WriteSshData
+        keyType |> certSshBuf.WriteSshData
+        certInfo.KeyId |> certSshBuf.WriteSshString
+        certInfo.Principals |> stringsToBuffer |> certSshBuf.WriteSshData
+        certInfo.ValidAfter.ToUnixTimeSeconds() |> certSshBuf.WriteSshData
+        certInfo.ValidBefore.ToUnixTimeSeconds() |> certSshBuf.WriteSshData
+        certInfo.CriticalOptions |> stringsToBuffer |> certSshBuf.WriteSshData
+        certInfo.Extensions |> stringsToBuffer |> certSshBuf.WriteSshData
+        reserved |> certSshBuf.WriteSshData
+        certInfo.CaPublicKey.AsSshPublicKeyBytes |> certSshBuf.WriteSshData
+        certMs
+
+    /// Signs the certificate content and returns that signature. The memory stream containing
+    /// the certificate content will be at the same position after signing.
+    let sign (signData:Stream -> byte array) (certContents:MemoryStream) =
+        use dataToSign = new MemoryStream()
+        certContents.Position <- 0L
+        certContents.CopyTo(dataToSign)
+        // Have to set the position to the beginning before signing or it will produce and invalid signature.
+        dataToSign.Position <- 0
+        dataToSign |> signData
+
+    let signAsync (signData:Func<Stream, System.Threading.CancellationToken, System.Threading.Tasks.Task<byte array>>) (cancellationToken:System.Threading.CancellationToken) (certContents:MemoryStream) =
+        use dataToSign = new MemoryStream()
+        certContents.Position <- 0L
+        certContents.CopyTo(dataToSign)
+        // Have to set the position to the beginning before signing or it will produce and invalid signature.
+        dataToSign.Position <- 0
+        signData.Invoke(dataToSign, cancellationToken)
+
+    /// Appends the signature to the certificate content stream.
+    let appendSignature (certContents:Stream) (signature:byte array) =
+        use ms = new MemoryStream()
+        let sshBuf = SshBuffer(ms)
+        "rsa-sha2-512" |> sshBuf.WriteSshString
+        signature |> sshBuf.WriteSshData
+        // Append the whole thing as a string for the signature blob
+        ms.ToArray() |> SshBuffer(certContents).WriteSshData
+
+    /// Writes the certificate contents to a byte array.
+    let getCertificateBytes(certContents:MemoryStream) =
+        certContents.ToArray()
+
+[<Sealed>]
+type CertificateAuthority(signData:Func<Stream, byte array>) =
+
+    /// Builds and signs and SSH certificate, returning the certificate contents.
+    member _.Sign(certInfo:CertificateInfo) =
+        if obj.ReferenceEquals(certInfo, null) then
+            nullArg "certInfo"
+        if certInfo.Nonce.Length <> 32 then
+            invalidArg "certInfo.Nonce" "Nonce must be 32 bytes."
+        use ms = CertificateSigning.buildCertificateContentStream(certInfo)
+        ms
+        |> CertificateSigning.sign signData.Invoke
+        |> CertificateSigning.appendSignature ms
+        CertificateSigning.getCertificateBytes ms
+
+    /// Builds and signs an SSH certificate, returning the contents in OpenSSH serialized format.
+    member this.SignAndSerialize (certInfo:CertificateInfo, comment:string) =
+        if obj.ReferenceEquals(certInfo, null) then
+            nullArg "certInfo"
+        let certBytes = certInfo |> this.Sign
+        let b64Cert = certBytes |> Convert.ToBase64String
+        if String.IsNullOrWhiteSpace comment then
+            String.Format("{0} {1}", CertificateSigning.RSA_SHA_512_CERT_ALG, b64Cert)
+        else
+            String.Format("{0} {1} {2}", CertificateSigning.RSA_SHA_512_CERT_ALG, b64Cert, comment)
+
+[<Sealed>]
+type CertificateAuthorityAsync(signDataAsync:Func<Stream, System.Threading.CancellationToken, System.Threading.Tasks.Task<byte array>>) =
+    member _.SignAsync(certInfo:CertificateInfo, cancellationToken:System.Threading.CancellationToken) =
+        if obj.ReferenceEquals(certInfo, null) then
+            nullArg "certInfo"
+        if certInfo.Nonce.Length <> 32 then
+            invalidArg "certInfo.Nonce" "Nonce must be 32 bytes."
+        backgroundTask {
+            use ms = CertificateSigning.buildCertificateContentStream(certInfo)
+            let! signature =
+                ms
+                |> CertificateSigning.signAsync signDataAsync cancellationToken
+            signature |> CertificateSigning.appendSignature ms
+            return CertificateSigning.getCertificateBytes ms
+        }
+
+    member this.SignAsync(certInfo:CertificateInfo) =
+        this.SignAsync(certInfo, System.Threading.CancellationToken.None)
+
+    member this.SignAndSerializeAsync (certInfo:CertificateInfo, comment:string) =
+        backgroundTask {
+            if obj.ReferenceEquals(certInfo, null) then
+                nullArg "certInfo"
+            let! certBytes = certInfo |> this.SignAsync
+            let b64Cert = certBytes |> Convert.ToBase64String
+            return
+                if String.IsNullOrWhiteSpace comment then
+                    String.Format("{0} {1}", CertificateSigning.RSA_SHA_512_CERT_ALG, b64Cert)
+                else
+                    String.Format("{0} {1} {2}", CertificateSigning.RSA_SHA_512_CERT_ALG, b64Cert, comment)
+        }
