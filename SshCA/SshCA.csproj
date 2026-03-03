@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
         <TargetFramework>net7.0</TargetFramework>
@@ -15,21 +15,13 @@
         <PublishRepositoryUrl>true</PublishRepositoryUrl>
         <RepositoryType>git</RepositoryType>
         <RepositoryUrl>https://github.com/ninjarobot/SshCA</RepositoryUrl>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>disable</ImplicitUsings>
     </PropertyGroup>
-    
-    <ItemGroup>
-        <PackageReference Update="FSharp.Core" Version="6.0.0" PrivateAssets="all"/>
-    </ItemGroup>
 
     <ItemGroup>
         <None Include="../LICENSE" Pack="true" PackagePath="" />
         <None Include="../README.md" Pack="true" PackagePath="\" />
-    </ItemGroup>
-
-    <ItemGroup>
-        <Compile Include="SshBuffer.fs" />
-        <Compile Include="PublicKey.fs" />
-        <Compile Include="SshCertificate.fs" />
     </ItemGroup>
 
 </Project>
