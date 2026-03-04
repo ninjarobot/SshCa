@@ -18,12 +18,12 @@
     </PropertyGroup>
     
     <ItemGroup>
-        <None Include="../LICENSE" Pack="true" PackagePath="" />
-        <None Include="../README.md" Pack="true" PackagePath="\" />
+        <PackageReference Update="FSharp.Core" Version="6.0.0" PrivateAssets="all"/>
     </ItemGroup>
 
     <ItemGroup>
-        <PackageReference Update="FSharp.Core" PrivateAssets="all" />
+        <None Include="../LICENSE" Pack="true" PackagePath="" />
+        <None Include="../README.md" Pack="true" PackagePath="\" />
     </ItemGroup>
 
     <ItemGroup>
