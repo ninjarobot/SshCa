@@ -236,10 +236,9 @@ type PublicKey with
         // NULL so it becomes the same modulus as before. Using that same technique here.
         let forcePosMod =
             if (exported.Modulus[0] &&& 128uy) <> 0uy then
-                seq {
-                    0uy
-                    yield! exported.Modulus
-                } |> Array.ofSeq
+                let result : byte array = Array.CreateInstance(typeof<byte>, exported.Modulus.Length + 1) :?> byte array
+                Array.Copy(exported.Modulus, 0, result, 1, exported.Modulus.Length)
+                result
             else exported.Modulus
         RsaPublicKey(exported.Exponent, forcePosMod, comment)
 

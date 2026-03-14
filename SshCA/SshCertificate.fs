@@ -27,11 +27,11 @@ type CertificateInfo(keyId:string, publicKeyToSign:PublicKey, caPublicKey:Public
     member val PublicKeyToSign = publicKeyToSign with get
     member val Serial = 0UL with get, set
     member val KeyId = keyId with get, set
-    member val Principals = Seq.empty<string> with get, set
+    member val Principals = Array.Empty<string>() :> System.Collections.Generic.IEnumerable<string> with get, set
     member val ValidAfter = DateTimeOffset.MinValue with get, set
     member val ValidBefore = DateTimeOffset.MinValue with get, set
-    member val CriticalOptions = Seq.empty<string> with get, set
-    member val Extensions = Seq.empty<string> with get, set
+    member val CriticalOptions = Array.Empty<string>() :> System.Collections.Generic.IEnumerable<string> with get, set
+    member val Extensions = Array.Empty<string>() :> System.Collections.Generic.IEnumerable<string> with get, set
     member val CaPublicKey = caPublicKey with get
 
     new (keyId:string, publicKeyToSign:PublicKey, caPublicKey:PublicKey) =
@@ -48,8 +48,9 @@ module private CertificateSigning =
     let stringsToBuffer (s:string seq) =
         use ms = new MemoryStream()
         let sshBuf = SshBuffer(ms)
-        if not <| isNull s then
-            s |> Seq.iter sshBuf.WriteSshString
+        if not (obj.ReferenceEquals(s, null)) then
+            for item in s do
+                sshBuf.WriteSshString item
         ms.ToArray()
 
     /// Builds the certificate contents ready to sign in a MemoryStream.
@@ -115,7 +116,7 @@ type CertificateAuthority(signData:Func<Stream, byte array>) =
 
     /// Builds and signs and SSH certificate, returning the certificate contents.
     member _.Sign(certInfo:CertificateInfo) =
-        if isNull certInfo then
+        if obj.ReferenceEquals(certInfo, null) then
             nullArg "certInfo"
         if certInfo.Nonce.Length <> 32 then
             invalidArg "certInfo.Nonce" "Nonce must be 32 bytes."
@@ -127,7 +128,7 @@ type CertificateAuthority(signData:Func<Stream, byte array>) =
 
     /// Builds and signs an SSH certificate, returning the contents in OpenSSH serialized format.
     member this.SignAndSerialize (certInfo:CertificateInfo, comment:string) =
-        if isNull certInfo then
+        if obj.ReferenceEquals(certInfo, null) then
             nullArg "certInfo"
         let certBytes = certInfo |> this.Sign
         let b64Cert = certBytes |> Convert.ToBase64String
@@ -139,7 +140,7 @@ type CertificateAuthority(signData:Func<Stream, byte array>) =
 [<Sealed>]
 type CertificateAuthorityAsync(signDataAsync:Func<Stream, System.Threading.CancellationToken, System.Threading.Tasks.Task<byte array>>) =
     member _.SignAsync(certInfo:CertificateInfo, cancellationToken:System.Threading.CancellationToken) =
-        if isNull certInfo then
+        if obj.ReferenceEquals(certInfo, null) then
             nullArg "certInfo"
         if certInfo.Nonce.Length <> 32 then
             invalidArg "certInfo.Nonce" "Nonce must be 32 bytes."
@@ -157,7 +158,7 @@ type CertificateAuthorityAsync(signDataAsync:Func<Stream, System.Threading.Cance
 
     member this.SignAndSerializeAsync (certInfo:CertificateInfo, comment:string) =
         backgroundTask {
-            if isNull certInfo then
+            if obj.ReferenceEquals(certInfo, null) then
                 nullArg "certInfo"
             let! certBytes = certInfo |> this.SignAsync
             let b64Cert = certBytes |> Convert.ToBase64String

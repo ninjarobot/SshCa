@@ -20,15 +20,16 @@ namespace SshCA
 open System.Buffers.Binary
 open System.IO
 open System.Text
+open System
 
 type SshBuffer(stream:Stream) =
     /// Reads the next string of bytes from the buffer, first by reading 4 bytes to get
     /// a 32-bit integer length, then reading that length of data.
     member _.ReadSshData () =
-        let sizeBuf : byte array = Array.zeroCreate 4
+        let sizeBuf : byte array = [| 0uy; 0uy; 0uy; 0uy |]
         stream.ReadExactly(sizeBuf)
         let len = BinaryPrimitives.ReadUInt32BigEndian sizeBuf
-        let data : byte array = Array.zeroCreate (len |> int)
+        let data : byte array = Array.CreateInstance(typeof<byte>, Convert.ToInt32 len) :?> byte array
         stream.ReadExactly data
         data
 
@@ -36,7 +37,7 @@ type SshBuffer(stream:Stream) =
     /// followed by the bytes themselves.
     member _.WriteSshData (bytes: byte array)=
         // Openssh processes these in big endian due to the network libraries used.
-        let sizeBuf = Array.zeroCreate<byte> 4
+        let sizeBuf = [| 0uy; 0uy; 0uy; 0uy |]
         BinaryPrimitives.WriteInt32BigEndian(sizeBuf, bytes.Length)
         stream.Write sizeBuf
         stream.Write bytes
@@ -45,7 +46,7 @@ type SshBuffer(stream:Stream) =
     ///
     /// This function ensures compatibility with OpenSSH's use of big-endian network byte order.
     member this.WriteSshString (value:string) =
-        if isNull value then
+        if obj.ReferenceEquals(value, null) then
             [||] |> this.WriteSshData
         else
             value |> (Encoding.UTF8.GetBytes >> this.WriteSshData)
@@ -57,15 +58,15 @@ type SshBuffer(stream:Stream) =
     /// This function ensures compatibility with OpenSSH's use of big-endian network byte order.
     member _.WriteSshData (value:int64)=
         // OpenSSH processes them in big endian due to the network libraries used.
-        let buf = Array.zeroCreate<byte>(sizeof<int64>)
+        let buf = [| 0uy; 0uy; 0uy; 0uy; 0uy; 0uy; 0uy; 0uy |]
         BinaryPrimitives.WriteInt64BigEndian(buf, value)
         stream.Write buf
     member _.WriteSshData (value:uint64)=
-        let buf = Array.zeroCreate<byte>(sizeof<uint64>)
+        let buf = [| 0uy; 0uy; 0uy; 0uy; 0uy; 0uy; 0uy; 0uy |]
         BinaryPrimitives.WriteUInt64BigEndian(buf, value)
         stream.Write buf
     member _.WriteSshData (value:uint32)=
-        let buf = Array.zeroCreate<byte>(sizeof<uint32>)
+        let buf = [| 0uy; 0uy; 0uy; 0uy |]
         BinaryPrimitives.WriteUInt32BigEndian(buf, value)
         stream.Write buf
     /// Directly writes bytes to the SSH buffer.
