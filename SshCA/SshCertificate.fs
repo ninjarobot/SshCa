@@ -27,11 +27,11 @@ type CertificateInfo(keyId:string, publicKeyToSign:PublicKey, caPublicKey:Public
     member val PublicKeyToSign = publicKeyToSign with get
     member val Serial = 0UL with get, set
     member val KeyId = keyId with get, set
-    member val Principals = System.Array.Empty<string>() :> System.Collections.Generic.IEnumerable<string> with get, set
+    member val Principals = Array.Empty<string>() :> System.Collections.Generic.IEnumerable<string> with get, set
     member val ValidAfter = DateTimeOffset.MinValue with get, set
     member val ValidBefore = DateTimeOffset.MinValue with get, set
-    member val CriticalOptions = System.Array.Empty<string>() :> System.Collections.Generic.IEnumerable<string> with get, set
-    member val Extensions = System.Array.Empty<string>() :> System.Collections.Generic.IEnumerable<string> with get, set
+    member val CriticalOptions = Array.Empty<string>() :> System.Collections.Generic.IEnumerable<string> with get, set
+    member val Extensions = Array.Empty<string>() :> System.Collections.Generic.IEnumerable<string> with get, set
     member val CaPublicKey = caPublicKey with get
 
     new (keyId:string, publicKeyToSign:PublicKey, caPublicKey:PublicKey) =

@@ -29,7 +29,7 @@ type SshBuffer(stream:Stream) =
         let sizeBuf : byte array = [| 0uy; 0uy; 0uy; 0uy |]
         stream.ReadExactly(sizeBuf)
         let len = BinaryPrimitives.ReadUInt32BigEndian sizeBuf
-        let data : byte array = System.Array.CreateInstance(typeof<byte>, Convert.ToInt32 len) :?> byte array
+        let data : byte array = Array.CreateInstance(typeof<byte>, Convert.ToInt32 len) :?> byte array
         stream.ReadExactly data
         data
 
