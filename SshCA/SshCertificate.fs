@@ -88,12 +88,14 @@ module private CertificateSigning =
         dataToSign |> signData
 
     let signAsync (signData:Func<Stream, System.Threading.CancellationToken, System.Threading.Tasks.Task<byte array>>) (cancellationToken:System.Threading.CancellationToken) (certContents:MemoryStream) =
-        use dataToSign = new MemoryStream()
-        certContents.Position <- 0L
-        certContents.CopyTo(dataToSign)
-        // Have to set the position to the beginning before signing or it will produce and invalid signature.
-        dataToSign.Position <- 0
-        signData.Invoke(dataToSign, cancellationToken)
+        backgroundTask {
+            use dataToSign = new MemoryStream()
+            certContents.Position <- 0L
+            certContents.CopyTo(dataToSign)
+            // Have to set the position to the beginning before signing or it will produce and invalid signature.
+            dataToSign.Position <- 0
+            return! signData.Invoke(dataToSign, cancellationToken)
+        }
 
     /// Appends the signature to the certificate content stream.
     let appendSignature (certContents:Stream) (signature:byte array) =
