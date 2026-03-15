@@ -131,7 +131,7 @@ let tests =
             Expect.isFalse
                 (pubKey = differentPubKey)
                 "Different public keys are not equal"
-         }
+        }
         test "Hashcode tests" {
             let pubKey = RsaPublicKey([|1uy;2uy|], [|3uy;4uy;5uy|], "test@example.com")
             let samePubKey = RsaPublicKey([|1uy;2uy|], [|3uy;4uy;5uy|], "test@example.com")
@@ -146,5 +146,5 @@ let tests =
             Expect.isTrue
                 (set.Add(differentPubKey))
                 "Different pubKey should be newly added"
-         }
+        }
     ]
