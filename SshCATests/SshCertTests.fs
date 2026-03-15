@@ -347,3 +347,454 @@ let certificateInfoTests =
             Expect.equal principals.[1] "user-name_123" "Principal with special chars should be preserved"
         }
     ]
+
+[<Tests>]
+let certificateAuthorityTests =
+    testList "CertificateAuthority Tests" [
+        test "Sign returns byte array" {
+            use ca = RSA.Create()
+            let caPubKey = ca.ExportRSAPublicKeyPem() |> PublicKey.OfRsaPublicKeyPem
+            let pubKeyToSign = TestData.testSshKey |> PublicKey.OfSshPublicKey
+            let certInfo =
+                CertificateInfo("testkey", pubKeyToSign, caPubKey,
+                                TestData.nonce,
+                                Serial=1UL, Principals=["testuser"],
+                                ValidAfter=DateTimeOffset(DateTime(2025, 6, 13, 8, 0, 0)),
+                                ValidBefore=DateTimeOffset(DateTime(2025, 6, 13, 8, 0, 0)).AddHours 2
+                )
+            let certAuth = CertificateAuthority(fun ms -> ca.SignData(ms, HashAlgorithmName.SHA512, RSASignaturePadding.Pkcs1))
+            
+            let certBytes = certAuth.Sign(certInfo)
+            
+            Expect.isNotNull certBytes "Certificate bytes should not be null"
+            Expect.isGreaterThan certBytes.Length 0 "Certificate bytes should not be empty"
+        }
+
+        test "Sign throws ArgumentNullException for null certInfo" {
+            use ca = RSA.Create()
+            let certAuth = CertificateAuthority(fun ms -> ca.SignData(ms, HashAlgorithmName.SHA512, RSASignaturePadding.Pkcs1))
+            
+            Expect.throws
+                (fun () -> certAuth.Sign(null) |> ignore)
+                "Should throw ArgumentNullException for null certInfo"
+        }
+
+        test "Sign throws ArgumentException for invalid nonce length" {
+            use ca = RSA.Create()
+            let caPubKey = ca.ExportRSAPublicKeyPem() |> PublicKey.OfRsaPublicKeyPem
+            let pubKeyToSign = TestData.testSshKey |> PublicKey.OfSshPublicKey
+            let invalidNonce = Array.create 16 0uy // Wrong size
+            let certInfo = CertificateInfo("testkey", pubKeyToSign, caPubKey, invalidNonce)
+            let certAuth = CertificateAuthority(fun ms -> ca.SignData(ms, HashAlgorithmName.SHA512, RSASignaturePadding.Pkcs1))
+            
+            Expect.throws
+                (fun () -> certAuth.Sign(certInfo) |> ignore)
+                "Should throw ArgumentException for nonce not 32 bytes"
+        }
+
+        test "SignAndSerialize with null comment omits comment" {
+            use ca = RSA.Create()
+            let caPubKey = ca.ExportRSAPublicKeyPem() |> PublicKey.OfRsaPublicKeyPem
+            let pubKeyToSign = TestData.testSshKey |> PublicKey.OfSshPublicKey
+            let certInfo =
+                CertificateInfo("testkey", pubKeyToSign, caPubKey,
+                                TestData.nonce,
+                                Serial=1UL, Principals=["testuser"],
+                                ValidAfter=DateTimeOffset(DateTime(2025, 6, 13, 8, 0, 0)),
+                                ValidBefore=DateTimeOffset(DateTime(2025, 6, 13, 8, 0, 0)).AddHours 2
+                )
+            let certAuth = CertificateAuthority(fun ms -> ca.SignData(ms, HashAlgorithmName.SHA512, RSASignaturePadding.Pkcs1))
+            
+            let certLine = certAuth.SignAndSerialize(certInfo, null)
+            
+            let parts = certLine.Split(' ')
+            Expect.equal parts.Length 2 "Should have only algorithm and key without comment"
+            Expect.equal parts.[0] "rsa-sha2-512-cert-v01@openssh.com" "Algorithm should be correct"
+        }
+
+        test "SignAndSerialize with empty comment omits comment" {
+            use ca = RSA.Create()
+            let caPubKey = ca.ExportRSAPublicKeyPem() |> PublicKey.OfRsaPublicKeyPem
+            let pubKeyToSign = TestData.testSshKey |> PublicKey.OfSshPublicKey
+            let certInfo =
+                CertificateInfo("testkey", pubKeyToSign, caPubKey,
+                                TestData.nonce,
+                                Serial=1UL, Principals=["testuser"],
+                                ValidAfter=DateTimeOffset(DateTime(2025, 6, 13, 8, 0, 0)),
+                                ValidBefore=DateTimeOffset(DateTime(2025, 6, 13, 8, 0, 0)).AddHours 2
+                )
+            let certAuth = CertificateAuthority(fun ms -> ca.SignData(ms, HashAlgorithmName.SHA512, RSASignaturePadding.Pkcs1))
+            
+            let certLine = certAuth.SignAndSerialize(certInfo, "")
+            
+            let parts = certLine.Split(' ')
+            Expect.equal parts.Length 2 "Should have only algorithm and key without comment"
+        }
+
+        test "SignAndSerialize with whitespace comment omits comment" {
+            use ca = RSA.Create()
+            let caPubKey = ca.ExportRSAPublicKeyPem() |> PublicKey.OfRsaPublicKeyPem
+            let pubKeyToSign = TestData.testSshKey |> PublicKey.OfSshPublicKey
+            let certInfo =
+                CertificateInfo("testkey", pubKeyToSign, caPubKey,
+                                TestData.nonce,
+                                Serial=1UL, Principals=["testuser"],
+                                ValidAfter=DateTimeOffset(DateTime(2025, 6, 13, 8, 0, 0)),
+                                ValidBefore=DateTimeOffset(DateTime(2025, 6, 13, 8, 0, 0)).AddHours 2
+                )
+            let certAuth = CertificateAuthority(fun ms -> ca.SignData(ms, HashAlgorithmName.SHA512, RSASignaturePadding.Pkcs1))
+            
+            let certLine = certAuth.SignAndSerialize(certInfo, "   ")
+            
+            let parts = certLine.Split(' ')
+            Expect.equal parts.Length 2 "Should have only algorithm and key without comment"
+        }
+
+        test "SignAndSerialize with comment includes comment" {
+            use ca = RSA.Create()
+            let caPubKey = ca.ExportRSAPublicKeyPem() |> PublicKey.OfRsaPublicKeyPem
+            let pubKeyToSign = TestData.testSshKey |> PublicKey.OfSshPublicKey
+            let certInfo =
+                CertificateInfo("testkey", pubKeyToSign, caPubKey,
+                                TestData.nonce,
+                                Serial=1UL, Principals=["testuser"],
+                                ValidAfter=DateTimeOffset(DateTime(2025, 6, 13, 8, 0, 0)),
+                                ValidBefore=DateTimeOffset(DateTime(2025, 6, 13, 8, 0, 0)).AddHours 2
+                )
+            let certAuth = CertificateAuthority(fun ms -> ca.SignData(ms, HashAlgorithmName.SHA512, RSASignaturePadding.Pkcs1))
+            
+            let certLine = certAuth.SignAndSerialize(certInfo, "user@domain")
+            
+            let parts = certLine.Split(' ')
+            Expect.equal parts.Length 3 "Should have algorithm, key, and comment"
+            Expect.equal parts.[2] "user@domain" "Comment should match"
+        }
+
+        test "SignAndSerialize throws ArgumentNullException for null certInfo" {
+            use ca = RSA.Create()
+            let certAuth = CertificateAuthority(fun ms -> ca.SignData(ms, HashAlgorithmName.SHA512, RSASignaturePadding.Pkcs1))
+            
+            Expect.throws
+                (fun () -> certAuth.SignAndSerialize(null, "comment") |> ignore)
+                "Should throw ArgumentNullException for null certInfo"
+        }
+
+        test "Different nonces produce different certificates" {
+            use ca = RSA.Create()
+            let caPubKey = ca.ExportRSAPublicKeyPem() |> PublicKey.OfRsaPublicKeyPem
+            let pubKeyToSign = TestData.testSshKey |> PublicKey.OfSshPublicKey
+            let nonce1 = Array.create 32 1uy
+            let nonce2 = Array.create 32 2uy
+            
+            let certInfo1 =
+                CertificateInfo("testkey", pubKeyToSign, caPubKey,
+                                nonce1,
+                                Serial=1UL, Principals=["testuser"],
+                                ValidAfter=DateTimeOffset(DateTime(2025, 6, 13, 8, 0, 0)),
+                                ValidBefore=DateTimeOffset(DateTime(2025, 6, 13, 8, 0, 0)).AddHours 2
+                )
+            let certInfo2 =
+                CertificateInfo("testkey", pubKeyToSign, caPubKey,
+                                nonce2,
+                                Serial=1UL, Principals=["testuser"],
+                                ValidAfter=DateTimeOffset(DateTime(2025, 6, 13, 8, 0, 0)),
+                                ValidBefore=DateTimeOffset(DateTime(2025, 6, 13, 8, 0, 0)).AddHours 2
+                )
+            
+            let certAuth = CertificateAuthority(fun ms -> ca.SignData(ms, HashAlgorithmName.SHA512, RSASignaturePadding.Pkcs1))
+            let cert1 = certAuth.SignAndSerialize(certInfo1, "test")
+            let cert2 = certAuth.SignAndSerialize(certInfo2, "test")
+            
+            Expect.notEqual cert1 cert2 "Different nonces should produce different certificates"
+        }
+    ]
+
+[<Tests>]
+let certificateAuthorityAsyncTests =
+    testList "CertificateAuthorityAsync Tests" [
+        testTask "SignAsync with cancellation token returns byte array" {
+            let ca = RSA.Create()
+            try
+                let caPubKey = ca.ExportRSAPublicKeyPem() |> PublicKey.OfRsaPublicKeyPem
+                let pubKeyToSign = TestData.testSshKey |> PublicKey.OfSshPublicKey
+                let certInfo =
+                    CertificateInfo("testkey", pubKeyToSign, caPubKey,
+                                    TestData.nonce,
+                                    Serial=1UL, Principals=["testuser"],
+                                    ValidAfter=DateTimeOffset(DateTime(2025, 6, 13, 8, 0, 0)),
+                                    ValidBefore=DateTimeOffset(DateTime(2025, 6, 13, 8, 0, 0)).AddHours 2
+                    )
+                let asyncSigner =
+                    fun (stream:Stream) (_:System.Threading.CancellationToken) ->
+                        backgroundTask {
+                            return ca.SignData(stream, HashAlgorithmName.SHA512, RSASignaturePadding.Pkcs1)
+                        }
+                let certAuth = CertificateAuthorityAsync(asyncSigner)
+                let cts = new System.Threading.CancellationTokenSource()
+                
+                let! (certBytes:byte array) = certAuth.SignAsync(certInfo, cts.Token)
+                
+                Expect.isNotNull certBytes "Certificate bytes should not be null"
+                Expect.isGreaterThan certBytes.Length 0 "Certificate bytes should not be empty"
+            finally
+                ca.Dispose()
+        }
+
+        testTask "SignAsync without cancellation token works" {
+            let ca = RSA.Create()
+            try
+                let caPubKey = ca.ExportRSAPublicKeyPem() |> PublicKey.OfRsaPublicKeyPem
+                let pubKeyToSign = TestData.testSshKey |> PublicKey.OfSshPublicKey
+                let certInfo =
+                    CertificateInfo("testkey", pubKeyToSign, caPubKey,
+                                    TestData.nonce,
+                                    Serial=1UL, Principals=["testuser"],
+                                    ValidAfter=DateTimeOffset(DateTime(2025, 6, 13, 8, 0, 0)),
+                                    ValidBefore=DateTimeOffset(DateTime(2025, 6, 13, 8, 0, 0)).AddHours 2
+                    )
+                let asyncSigner =
+                    fun (stream:Stream) (_:System.Threading.CancellationToken) ->
+                        backgroundTask {
+                            return ca.SignData(stream, HashAlgorithmName.SHA512, RSASignaturePadding.Pkcs1)
+                        }
+                let certAuth = CertificateAuthorityAsync(asyncSigner)
+                
+                let! (certBytes:byte array) = certAuth.SignAsync(certInfo)
+                
+                Expect.isNotNull certBytes "Certificate bytes should not be null"
+                Expect.isGreaterThan certBytes.Length 0 "Certificate bytes should not be empty"
+            finally
+                ca.Dispose()
+        }
+
+        testTask "SignAsync throws ArgumentNullException for null certInfo" {
+            let ca = RSA.Create()
+            try
+                let asyncSigner =
+                    fun (stream:Stream) (_:System.Threading.CancellationToken) ->
+                        backgroundTask {
+                            return ca.SignData(stream, HashAlgorithmName.SHA512, RSASignaturePadding.Pkcs1)
+                        }
+                let certAuth = CertificateAuthorityAsync(asyncSigner)
+                
+                let! result =
+                    Async.AwaitTask(
+                        task {
+                            try
+                                let! _ = certAuth.SignAsync(null)
+                                return false
+                            with
+                            | :? ArgumentNullException -> return true
+                            | _ -> return false
+                        }
+                    )
+                Expect.isTrue result "Should throw ArgumentNullException for null certInfo"
+            finally
+                ca.Dispose()
+        }
+
+        testTask "SignAsync throws ArgumentException for invalid nonce length" {
+            let ca = RSA.Create()
+            try
+                let caPubKey = ca.ExportRSAPublicKeyPem() |> PublicKey.OfRsaPublicKeyPem
+                let pubKeyToSign = TestData.testSshKey |> PublicKey.OfSshPublicKey
+                let invalidNonce = Array.create 16 0uy // Wrong size
+                let certInfo = CertificateInfo("testkey", pubKeyToSign, caPubKey, invalidNonce)
+                let asyncSigner =
+                    fun (stream:Stream) (_:System.Threading.CancellationToken) ->
+                        backgroundTask {
+                            return ca.SignData(stream, HashAlgorithmName.SHA512, RSASignaturePadding.Pkcs1)
+                        }
+                let certAuth = CertificateAuthorityAsync(asyncSigner)
+                
+                let! result =
+                    Async.AwaitTask(
+                        task {
+                            try
+                                let! _ = certAuth.SignAsync(certInfo)
+                                return false
+                            with
+                            | :? ArgumentException -> return true
+                            | _ -> return false
+                        }
+                    )
+                Expect.isTrue result "Should throw ArgumentException for invalid nonce"
+            finally
+                ca.Dispose()
+        }
+
+        testTask "SignAndSerializeAsync with null comment omits comment" {
+            let ca = RSA.Create()
+            try
+                let caPubKey = ca.ExportRSAPublicKeyPem() |> PublicKey.OfRsaPublicKeyPem
+                let pubKeyToSign = TestData.testSshKey |> PublicKey.OfSshPublicKey
+                let certInfo =
+                    CertificateInfo("testkey", pubKeyToSign, caPubKey,
+                                    TestData.nonce,
+                                    Serial=1UL, Principals=["testuser"],
+                                    ValidAfter=DateTimeOffset(DateTime(2025, 6, 13, 8, 0, 0)),
+                                    ValidBefore=DateTimeOffset(DateTime(2025, 6, 13, 8, 0, 0)).AddHours 2
+                    )
+                let asyncSigner =
+                    fun (stream:Stream) (_:System.Threading.CancellationToken) ->
+                        backgroundTask {
+                            return ca.SignData(stream, HashAlgorithmName.SHA512, RSASignaturePadding.Pkcs1)
+                        }
+                let certAuth = CertificateAuthorityAsync(asyncSigner)
+                
+                let! (certLine:string) = certAuth.SignAndSerializeAsync(certInfo, null)
+                
+                let parts = certLine.Split(' ')
+                Expect.equal parts.Length 2 "Should have only algorithm and key without comment"
+                Expect.equal parts.[0] "rsa-sha2-512-cert-v01@openssh.com" "Algorithm should be correct"
+            finally
+                ca.Dispose()
+        }
+
+        testTask "SignAndSerializeAsync with empty comment omits comment" {
+            let ca = RSA.Create()
+            try
+                let caPubKey = ca.ExportRSAPublicKeyPem() |> PublicKey.OfRsaPublicKeyPem
+                let pubKeyToSign = TestData.testSshKey |> PublicKey.OfSshPublicKey
+                let certInfo =
+                    CertificateInfo("testkey", pubKeyToSign, caPubKey,
+                                    TestData.nonce,
+                                    Serial=1UL, Principals=["testuser"],
+                                    ValidAfter=DateTimeOffset(DateTime(2025, 6, 13, 8, 0, 0)),
+                                    ValidBefore=DateTimeOffset(DateTime(2025, 6, 13, 8, 0, 0)).AddHours 2
+                    )
+                let asyncSigner =
+                    fun (stream:Stream) (_:System.Threading.CancellationToken) ->
+                        backgroundTask {
+                            return ca.SignData(stream, HashAlgorithmName.SHA512, RSASignaturePadding.Pkcs1)
+                        }
+                let certAuth = CertificateAuthorityAsync(asyncSigner)
+                
+                let! (certLine:string) = certAuth.SignAndSerializeAsync(certInfo, "")
+                
+                let parts = certLine.Split(' ')
+                Expect.equal parts.Length 2 "Should have only algorithm and key without comment"
+            finally
+                ca.Dispose()
+        }
+
+        testTask "SignAndSerializeAsync with comment includes comment" {
+            let ca = RSA.Create()
+            try
+                let caPubKey = ca.ExportRSAPublicKeyPem() |> PublicKey.OfRsaPublicKeyPem
+                let pubKeyToSign = TestData.testSshKey |> PublicKey.OfSshPublicKey
+                let certInfo =
+                    CertificateInfo("testkey", pubKeyToSign, caPubKey,
+                                    TestData.nonce,
+                                    Serial=1UL, Principals=["testuser"],
+                                    ValidAfter=DateTimeOffset(DateTime(2025, 6, 13, 8, 0, 0)),
+                                    ValidBefore=DateTimeOffset(DateTime(2025, 6, 13, 8, 0, 0)).AddHours 2
+                    )
+                let asyncSigner =
+                    fun (stream:Stream) (_:System.Threading.CancellationToken) ->
+                        backgroundTask {
+                            return ca.SignData(stream, HashAlgorithmName.SHA512, RSASignaturePadding.Pkcs1)
+                        }
+                let certAuth = CertificateAuthorityAsync(asyncSigner)
+                
+                let! (certLine:string) = certAuth.SignAndSerializeAsync(certInfo, "user@domain")
+                
+                let parts = certLine.Split(' ')
+                Expect.equal parts.Length 3 "Should have algorithm, key, and comment"
+                Expect.equal parts.[2] "user@domain" "Comment should match"
+            finally
+                ca.Dispose()
+        }
+
+        testTask "SignAndSerializeAsync throws ArgumentNullException for null certInfo" {
+            let ca = RSA.Create()
+            try
+                let asyncSigner =
+                    fun (stream:Stream) (_:System.Threading.CancellationToken) ->
+                        backgroundTask {
+                            return ca.SignData(stream, HashAlgorithmName.SHA512, RSASignaturePadding.Pkcs1)
+                        }
+                let certAuth = CertificateAuthorityAsync(asyncSigner)
+                
+                let! result =
+                    Async.AwaitTask(
+                        task {
+                            try
+                                let! _ = certAuth.SignAndSerializeAsync(null, "comment")
+                                return false
+                            with
+                            | :? ArgumentNullException -> return true
+                            | _ -> return false
+                        }
+                    )
+                Expect.isTrue result "Should throw ArgumentNullException for null certInfo"
+            finally
+                ca.Dispose()
+        }
+
+        testTask "Cancellation token is passed through to signing function" {
+            let ca = RSA.Create()
+            try
+                let caPubKey = ca.ExportRSAPublicKeyPem() |> PublicKey.OfRsaPublicKeyPem
+                let pubKeyToSign = TestData.testSshKey |> PublicKey.OfSshPublicKey
+                let certInfo =
+                    CertificateInfo("testkey", pubKeyToSign, caPubKey,
+                                    TestData.nonce,
+                                    Serial=1UL, Principals=["testuser"],
+                                    ValidAfter=DateTimeOffset(DateTime(2025, 6, 13, 8, 0, 0)),
+                                    ValidBefore=DateTimeOffset(DateTime(2025, 6, 13, 8, 0, 0)).AddHours 2
+                    )
+                let mutable tokenPassed = System.Threading.CancellationToken.None
+                let asyncSigner =
+                    fun (stream:Stream) (ct:System.Threading.CancellationToken) ->
+                        backgroundTask {
+                            tokenPassed <- ct
+                            return ca.SignData(stream, HashAlgorithmName.SHA512, RSASignaturePadding.Pkcs1)
+                        }
+                let certAuth = CertificateAuthorityAsync(asyncSigner)
+                let cts = new System.Threading.CancellationTokenSource()
+                
+                let! _ = certAuth.SignAsync(certInfo, cts.Token)
+                
+                Expect.equal tokenPassed cts.Token "Cancellation token should be passed to signing function"
+            finally
+                ca.Dispose()
+        }
+
+        testTask "Different nonces produce different certificates async" {
+            let ca = RSA.Create()
+            try
+                let caPubKey = ca.ExportRSAPublicKeyPem() |> PublicKey.OfRsaPublicKeyPem
+                let pubKeyToSign = TestData.testSshKey |> PublicKey.OfSshPublicKey
+                let nonce1 = Array.create 32 1uy
+                let nonce2 = Array.create 32 2uy
+                
+                let certInfo1 =
+                    CertificateInfo("testkey", pubKeyToSign, caPubKey,
+                                    nonce1,
+                                    Serial=1UL, Principals=["testuser"],
+                                    ValidAfter=DateTimeOffset(DateTime(2025, 6, 13, 8, 0, 0)),
+                                    ValidBefore=DateTimeOffset(DateTime(2025, 6, 13, 8, 0, 0)).AddHours 2
+                    )
+                let certInfo2 =
+                    CertificateInfo("testkey", pubKeyToSign, caPubKey,
+                                    nonce2,
+                                    Serial=1UL, Principals=["testuser"],
+                                    ValidAfter=DateTimeOffset(DateTime(2025, 6, 13, 8, 0, 0)),
+                                    ValidBefore=DateTimeOffset(DateTime(2025, 6, 13, 8, 0, 0)).AddHours 2
+                    )
+                let asyncSigner =
+                    fun (stream:Stream) (_:System.Threading.CancellationToken) ->
+                        backgroundTask {
+                            return ca.SignData(stream, HashAlgorithmName.SHA512, RSASignaturePadding.Pkcs1)
+                        }
+                
+                let certAuth = CertificateAuthorityAsync(asyncSigner)
+                let! cert1 = certAuth.SignAndSerializeAsync(certInfo1, "test")
+                let! cert2 = certAuth.SignAndSerializeAsync(certInfo2, "test")
+                
+                Expect.notEqual cert1 cert2 "Different nonces should produce different certificates"
+            finally
+                ca.Dispose()
+        }
+    ]
