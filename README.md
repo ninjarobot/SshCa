@@ -14,6 +14,7 @@ See the [SshCATests](SshCATests) project for examples.
 * Write RSA public keys as OpenSSH public keys
 * Sign OpenSSH public keys with an RSA implementation such as `System.Security.Cryptography.RSA` or the one returned by `Azure.Security.KeyVault.Keys.Cryptography.CryptographyClient.CreateRSA`.
 * Safe parsing with `TryParse*` methods that don't throw exceptions
+* Helper methods for adding common certificate extensions and critical options
 
 ### Important Information
 
@@ -74,7 +75,12 @@ var certInfo = new CertificateInfo("my-account@linux-server", pubKey, caPubKey);
 certInfo.ValidAfter = DateTimeOffset.Now;
 certInfo.ValidBefore = certInfo.ValidAfter.AddHours(1); // This signature is only good for an hour.
 certInfo.Principals = new List<string>() {"linuxuser"}; // Whatever user(s) you can login as.
-certInfo.Extensions = new List<string>() {"permit-pty", ""}; // At least this so you can get a shell.
+
+// Add extensions using helper methods
+certInfo.AddPermitPty();              // Required for interactive shells
+certInfo.AddPermitAgentForwarding();  // Allow ssh-agent forwarding
+certInfo.AddPermitPortForwarding();   // Allow port forwarding
+// Or use AddAllPermitExtensions() to add all common extensions at once
 
 // Sign it using the CA private key. This signing happens in the Key Vault itself.
 var cryptoClient = new CryptographyClient(new Uri("https://mykeyvault.vault.azure.net/keys/ssh-signing-key"), cred);
@@ -139,3 +145,45 @@ The `TryParse*` methods return `false` and set the out parameter to `null` for a
 - Malformed key data
 - Oversized input (>10,000 characters for SSH keys)
 - Invalid PEM format
+
+### Adding Extensions and Critical Options
+
+The `CertificateInfo` class provides helper methods to easily add common extensions and critical options:
+
+```csharp
+using SshCA;
+
+var certInfo = new CertificateInfo("user@host", publicKey, caPublicKey);
+
+// Add individual extensions
+certInfo.AddPermitPty();              // Allow pseudo-terminal allocation (required for shells)
+certInfo.AddPermitAgentForwarding();  // Allow ssh-agent forwarding
+certInfo.AddPermitPortForwarding();   // Allow port forwarding
+certInfo.AddPermitX11Forwarding();    // Allow X11 forwarding
+certInfo.AddPermitUserRc();           // Allow execution of ~/.ssh/rc
+
+// Or add all common extensions at once
+certInfo.AddAllPermitExtensions();
+
+// Add custom extensions
+certInfo.AddExtension("my-custom-extension", "optional-data");
+
+// Add critical options
+certInfo.AddForceCommand("/usr/bin/restricted-shell");  // Force a specific command
+certInfo.AddSourceAddress("192.168.1.0/24,10.0.0.0/8"); // Restrict source addresses
+
+// Add custom critical options
+certInfo.AddCriticalOption("my-option", "value");
+```
+
+**Available Extension Helpers:**
+- `AddPermitPty()` - Required for interactive shells
+- `AddPermitAgentForwarding()` - Allow SSH agent forwarding
+- `AddPermitPortForwarding()` - Allow port forwarding  
+- `AddPermitX11Forwarding()` - Allow X11 forwarding
+- `AddPermitUserRc()` - Allow execution of ~/.ssh/rc
+- `AddAllPermitExtensions()` - Adds all of the above
+
+**Available Critical Option Helpers:**
+- `AddForceCommand(command)` - Force execution of a specific command
+- `AddSourceAddress(cidrList)` - Restrict valid source addresses (comma-separated CIDR blocks)

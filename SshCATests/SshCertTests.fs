@@ -262,33 +262,40 @@ let certificateInfoTests =
             Expect.equal certInfo.ValidBefore validBefore "ValidBefore should match"
         }
 
-        test "CriticalOptions can be set" {
+        test "CriticalOptions can be set with legacy format" {
             use ca = RSA.Create()
             let caPubKey = ca.ExportRSAPublicKeyPem() |> PublicKey.ParseRsaPublicKeyPem
             let pubKeyToSign = TestData.testSshKey |> PublicKey.ParseSshPublicKey
             
             let certInfo = CertificateInfo("testkey", pubKeyToSign, caPubKey, TestData.nonce)
-            certInfo.CriticalOptions <- ["force-command=/bin/bash"; "source-address=192.168.1.0/24"]
+            // Critical options must be in name-value pairs (name, data, name, data, ...)
+            #nowarn "44" // Suppress obsolete warning - testing legacy setter
+            certInfo.CriticalOptions <- ["force-command"; "/bin/bash"; "source-address"; "192.168.1.0/24"]
             
             let options = certInfo.CriticalOptions |> Seq.toList
-            Expect.equal options.Length 2 "Should have 2 critical options"
-            Expect.equal options.[0] "force-command=/bin/bash" "First option incorrect"
-            Expect.equal options.[1] "source-address=192.168.1.0/24" "Second option incorrect"
+            Expect.equal options.Length 4 "Should have 2 name-value pairs (4 items)"
+            Expect.equal options.[0] "force-command" "First option name incorrect"
+            Expect.equal options.[1] "/bin/bash" "First option value incorrect"
+            Expect.equal options.[2] "source-address" "Second option name incorrect"
+            Expect.equal options.[3] "192.168.1.0/24" "Second option value incorrect"
         }
 
-        test "Extensions can be set" {
+        test "Extensions can be set with legacy format" {
             use ca = RSA.Create()
             let caPubKey = ca.ExportRSAPublicKeyPem() |> PublicKey.ParseRsaPublicKeyPem
             let pubKeyToSign = TestData.testSshKey |> PublicKey.ParseSshPublicKey
             
             let certInfo = CertificateInfo("testkey", pubKeyToSign, caPubKey, TestData.nonce)
-            certInfo.Extensions <- ["permit-X11-forwarding"; "permit-agent-forwarding"; "permit-port-forwarding"]
+            // Extensions must be in name-value pairs (name, data, name, data, ...)
+            #nowarn "44" // Suppress obsolete warning - testing legacy setter
+            certInfo.Extensions <- ["permit-X11-forwarding"; ""; "permit-agent-forwarding"; ""; "permit-port-forwarding"; ""]
             
             let extensions = certInfo.Extensions |> Seq.toList
-            Expect.equal extensions.Length 3 "Should have 3 extensions"
-            Expect.equal extensions.[0] "permit-X11-forwarding" "First extension incorrect"
-            Expect.equal extensions.[1] "permit-agent-forwarding" "Second extension incorrect"
-            Expect.equal extensions.[2] "permit-port-forwarding" "Third extension incorrect"
+            Expect.equal extensions.Length 6 "Should have 3 name-value pairs (6 items)"
+            Expect.equal extensions.[0] "permit-X11-forwarding" "First extension name incorrect"
+            Expect.equal extensions.[1] "" "First extension value should be empty"
+            Expect.equal extensions.[2] "permit-agent-forwarding" "Second extension name incorrect"
+            Expect.equal extensions.[3] "" "Second extension value should be empty"
         }
 
         test "Nonce can be changed after construction" {
@@ -506,6 +513,167 @@ let certificateAuthorityTests =
             let cert2 = certAuth.SignAndSerialize(certInfo2, "test")
             
             Expect.notEqual cert1 cert2 "Different nonces should produce different certificates"
+        }
+        
+        test "AddPermitPty extension helper works" {
+            use ca = RSA.Create()
+            let caPubKey = ca.ExportRSAPublicKeyPem() |> PublicKey.ParseRsaPublicKeyPem
+            let pubKeyToSign = TestData.testSshKey |> PublicKey.ParseSshPublicKey
+            
+            let certInfo = CertificateInfo("testkey", pubKeyToSign, caPubKey, TestData.nonce)
+            certInfo.AddPermitPty()
+            
+            let extensions = certInfo.Extensions |> Seq.toList
+            Expect.equal extensions.Length 2 "Should have name and empty value"
+            Expect.equal extensions.[0] "permit-pty" "Extension name incorrect"
+            Expect.equal extensions.[1] "" "Extension value should be empty"
+        }
+        
+        test "AddAllPermitExtensions adds all five extensions" {
+            use ca = RSA.Create()
+            let caPubKey = ca.ExportRSAPublicKeyPem() |> PublicKey.ParseRsaPublicKeyPem
+            let pubKeyToSign = TestData.testSshKey |> PublicKey.ParseSshPublicKey
+            
+            let certInfo = CertificateInfo("testkey", pubKeyToSign, caPubKey, TestData.nonce)
+            certInfo.AddAllPermitExtensions()
+            
+            let extensions = certInfo.Extensions |> Seq.toList
+            Expect.equal extensions.Length 10 "Should have 5 extensions (name+value pairs)"
+            Expect.contains extensions "permit-pty" "Should contain permit-pty"
+            Expect.contains extensions "permit-agent-forwarding" "Should contain permit-agent-forwarding"
+            Expect.contains extensions "permit-port-forwarding" "Should contain permit-port-forwarding"
+            Expect.contains extensions "permit-X11-forwarding" "Should contain permit-X11-forwarding"
+            Expect.contains extensions "permit-user-rc" "Should contain permit-user-rc"
+        }
+        
+        test "AddForceCommand critical option helper works" {
+            use ca = RSA.Create()
+            let caPubKey = ca.ExportRSAPublicKeyPem() |> PublicKey.ParseRsaPublicKeyPem
+            let pubKeyToSign = TestData.testSshKey |> PublicKey.ParseSshPublicKey
+            
+            let certInfo = CertificateInfo("testkey", pubKeyToSign, caPubKey, TestData.nonce)
+            certInfo.AddForceCommand("/bin/restricted-shell")
+            
+            let options = certInfo.CriticalOptions |> Seq.toList
+            Expect.equal options.Length 2 "Should have name and value"
+            Expect.equal options.[0] "force-command" "Option name incorrect"
+            Expect.equal options.[1] "/bin/restricted-shell" "Option value incorrect"
+        }
+        
+        test "AddSourceAddress critical option helper works" {
+            use ca = RSA.Create()
+            let caPubKey = ca.ExportRSAPublicKeyPem() |> PublicKey.ParseRsaPublicKeyPem
+            let pubKeyToSign = TestData.testSshKey |> PublicKey.ParseSshPublicKey
+            
+            let certInfo = CertificateInfo("testkey", pubKeyToSign, caPubKey, TestData.nonce)
+            certInfo.AddSourceAddress("192.168.1.0/24,10.0.0.0/8")
+            
+            let options = certInfo.CriticalOptions |> Seq.toList
+            Expect.equal options.Length 2 "Should have name and value"
+            Expect.equal options.[0] "source-address" "Option name incorrect"
+            Expect.equal options.[1] "192.168.1.0/24,10.0.0.0/8" "Option value incorrect"
+        }
+        
+        test "Multiple extensions can be added with helpers" {
+            use ca = RSA.Create()
+            let caPubKey = ca.ExportRSAPublicKeyPem() |> PublicKey.ParseRsaPublicKeyPem
+            let pubKeyToSign = TestData.testSshKey |> PublicKey.ParseSshPublicKey
+            
+            let certInfo = CertificateInfo("testkey", pubKeyToSign, caPubKey, TestData.nonce)
+            certInfo.AddPermitPty()
+            certInfo.AddPermitAgentForwarding()
+            certInfo.AddPermitPortForwarding()
+            
+            let extensions = certInfo.Extensions |> Seq.toList
+            Expect.equal extensions.Length 6 "Should have 3 extensions (name+value pairs)"
+            Expect.contains extensions "permit-pty" "Should contain permit-pty"
+            Expect.contains extensions "permit-agent-forwarding" "Should contain permit-agent-forwarding"
+            Expect.contains extensions "permit-port-forwarding" "Should contain permit-port-forwarding"
+        }
+        
+        test "Custom extension can be added with data" {
+            use ca = RSA.Create()
+            let caPubKey = ca.ExportRSAPublicKeyPem() |> PublicKey.ParseRsaPublicKeyPem
+            let pubKeyToSign = TestData.testSshKey |> PublicKey.ParseSshPublicKey
+            
+            let certInfo = CertificateInfo("testkey", pubKeyToSign, caPubKey, TestData.nonce)
+            certInfo.AddExtension("custom-extension", "custom-data")
+            
+            let extensions = certInfo.Extensions |> Seq.toList
+            Expect.equal extensions.Length 2 "Should have name and value"
+            Expect.equal extensions.[0] "custom-extension" "Extension name incorrect"
+            Expect.equal extensions.[1] "custom-data" "Extension value incorrect"
+        }
+        
+        test "Extension helpers validate null names" {
+            use ca = RSA.Create()
+            let caPubKey = ca.ExportRSAPublicKeyPem() |> PublicKey.ParseRsaPublicKeyPem
+            let pubKeyToSign = TestData.testSshKey |> PublicKey.ParseSshPublicKey
+            
+            let certInfo = CertificateInfo("testkey", pubKeyToSign, caPubKey, TestData.nonce)
+            
+            Expect.throws
+                (fun () -> certInfo.AddExtension(null, "data"))
+                "Should throw for null extension name"
+        }
+        
+        test "Critical option helpers validate null names" {
+            use ca = RSA.Create()
+            let caPubKey = ca.ExportRSAPublicKeyPem() |> PublicKey.ParseRsaPublicKeyPem
+            let pubKeyToSign = TestData.testSshKey |> PublicKey.ParseSshPublicKey
+            
+            let certInfo = CertificateInfo("testkey", pubKeyToSign, caPubKey, TestData.nonce)
+            
+            Expect.throws
+                (fun () -> certInfo.AddCriticalOption(null, "data"))
+                "Should throw for null option name"
+        }
+        
+        test "Extension helpers validate empty names" {
+            use ca = RSA.Create()
+            let caPubKey = ca.ExportRSAPublicKeyPem() |> PublicKey.ParseRsaPublicKeyPem
+            let pubKeyToSign = TestData.testSshKey |> PublicKey.ParseSshPublicKey
+            
+            let certInfo = CertificateInfo("testkey", pubKeyToSign, caPubKey, TestData.nonce)
+            
+            Expect.throws
+                (fun () -> certInfo.AddExtension("", "data"))
+                "Should throw for empty extension name"
+        }
+        
+        test "Mixing legacy Extensions property with helper methods" {
+            use ca = RSA.Create()
+            let caPubKey = ca.ExportRSAPublicKeyPem() |> PublicKey.ParseRsaPublicKeyPem
+            let pubKeyToSign = TestData.testSshKey |> PublicKey.ParseSshPublicKey
+            
+            let certInfo = CertificateInfo("testkey", pubKeyToSign, caPubKey, TestData.nonce)
+            // Set via property first
+            #nowarn "44" // Suppress obsolete warning - testing legacy setter compatibility
+            certInfo.Extensions <- ["permit-pty"; ""]
+            // Add via helper
+            certInfo.AddPermitAgentForwarding()
+            
+            let extensions = certInfo.Extensions |> Seq.toList
+            Expect.equal extensions.Length 4 "Should have both extensions (2 name-value pairs)"
+            Expect.contains extensions "permit-pty" "Should contain permit-pty"
+            Expect.contains extensions "permit-agent-forwarding" "Should contain permit-agent-forwarding"
+        }
+        
+        test "Extensions with odd number of items silently drops last item" {
+            use ca = RSA.Create()
+            let caPubKey = ca.ExportRSAPublicKeyPem() |> PublicKey.ParseRsaPublicKeyPem
+            let pubKeyToSign = TestData.testSshKey |> PublicKey.ParseSshPublicKey
+            
+            let certInfo = CertificateInfo("testkey", pubKeyToSign, caPubKey, TestData.nonce)
+            // Odd number - last item has no pair
+            #nowarn "44" // Suppress obsolete warning - testing legacy setter edge case
+            certInfo.Extensions <- ["name1"; "value1"; "orphan"]
+            
+            let extensions = certInfo.Extensions |> Seq.toList
+            // Only the complete pair is preserved
+            Expect.equal extensions.Length 2 "Orphaned item should be dropped"
+            Expect.equal extensions.[0] "name1" "First name preserved"
+            Expect.equal extensions.[1] "value1" "First value preserved"
         }
     ]
 
