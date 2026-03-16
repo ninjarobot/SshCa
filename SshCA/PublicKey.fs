@@ -19,10 +19,11 @@ namespace SshCA
 
 open System
 open System.IO
+open System.Runtime.InteropServices
 open System.Security.Cryptography
 open System.Text
 
-[<AbstractClass>]
+[<AbstractClass; AllowNullLiteral>]
 type PublicKey(algorithm:string, comment:string) =
     /// Represents a public key used in cryptographic algorithms.
     ///
@@ -156,14 +157,15 @@ type PublicKey with
     ///   data and optional comment.
     ///
     /// Exceptions:
+    /// - `System.ArgumentException`: Thrown when keyLine is null or empty.
     /// - `System.FormatException`: Thrown when the key string is not properly
-    ///   formatted or when base64 decoding fails.
-    /// - `System.InvalidOperationException`: Thrown when the parsed data does not
-    ///   contain sufficient information to construct a valid public key.
+    ///   formatted, when base64 decoding fails, when the algorithm in the key
+    ///   line doesn't match the algorithm in the embedded data, or when the
+    ///   algorithm is not supported (currently only 'ssh-rsa' is supported).
     ///
     /// Assumptions:
     /// - The key string follows the standard SSH public key format.
-    static member OfSshPublicKey (keyLine:string) =
+    static member ParseSshPublicKey (keyLine:string) =
         if String.IsNullOrEmpty keyLine then
             invalidArg "keyLine" "Empty OpenSSH public key passed."
         // Plain SSH key line is ~400 characters, so 10,000 is a sane maximum.
@@ -177,6 +179,15 @@ type PublicKey with
             use ms = new MemoryStream(data)
             let sshBuf = SshBuffer(ms)
             let alg = sshBuf.ReadSshData() |> Encoding.UTF8.GetString
+            
+            // Validate that the algorithm in the key line matches the embedded algorithm
+            if algName <> alg then
+                raise (FormatException (String.Format("Algorithm mismatch: key line specifies '{0}' but embedded data contains '{1}'", algName, alg)))
+            
+            // Validate that we support this algorithm
+            if alg <> RsaPublicKey.SshRsa then
+                raise (FormatException (String.Format("Unsupported algorithm '{0}'. Only '{1}' is currently supported.", alg, RsaPublicKey.SshRsa)))
+            
             let e = sshBuf.ReadSshData()
             let n = sshBuf.ReadSshData()
             if sections.Length > 2 then
@@ -212,7 +223,7 @@ type PublicKey with
     static member ToSshCertAuthority (pubKey:PublicKey) =
         String.Concat ("cert-authority ", pubKey.AsSshPublicKey)
 
-    /// Converts a PEM-encoded RSA public key string and a comment to an internal
+    /// Parses a PEM-encoded RSA public key string and a comment to an internal
     /// representation suitable for working with SSH-compatible RSA parameters.
     ///
     /// The function imports the RSA public key from a PEM-encoded string, extracts
@@ -220,12 +231,17 @@ type PublicKey with
     /// ensure the modulus is properly formatted for OpenSSH compatibility. Specifically,
     /// it ensures the most significant bit (MSB) of the modulus is positive.
     ///
-    /// Returns a record containing:
-    /// - Algorithm: Identifies the algorithm type (e.g., RSA).
-    /// - Exponent: The public exponent of the RSA key.
-    /// - Modulus: The modulus of the RSA key, adjusted to a positive MSB if required.
-    /// - Comment: An optional comment field, which defaults to None.
-    static member OfRsaPublicKeyPem (pem:string, comment:string) =
+    /// Parameters:
+    /// - `pem`: A PEM-encoded RSA public key string.
+    /// - `comment`: An optional comment to associate with the public key.
+    ///
+    /// Returns:
+    /// - An instance of the `PublicKey` class initialized with the parsed key data.
+    ///
+    /// Exceptions:
+    /// - `System.ArgumentException`: Thrown when the PEM string is null or empty.
+    /// - `System.Security.Cryptography.CryptographicException`: Thrown when the PEM format is invalid.
+    static member ParseRsaPublicKeyPem (pem:string, comment:string) =
         if String.IsNullOrEmpty pem then
             invalidArg "pem" "Empty RSA public key PEM passed."
         use rsa = RSA.Create()
@@ -242,7 +258,7 @@ type PublicKey with
             else exported.Modulus
         RsaPublicKey(exported.Exponent, forcePosMod, comment)
 
-    /// Converts a PEM-encoded RSA public key string to an internal representation
+    /// Parses a PEM-encoded RSA public key string to an internal representation
     /// suitable for working with SSH-compatible RSA parameters.
     ///
     /// The function imports the RSA public key from a PEM-encoded string, extracts
@@ -250,13 +266,94 @@ type PublicKey with
     /// ensure the modulus is properly formatted for OpenSSH compatibility. Specifically,
     /// it ensures the most significant bit (MSB) of the modulus is positive.
     ///
-    /// Returns a record containing:
-    /// - Algorithm: Identifies the algorithm type (e.g., RSA).
-    /// - Exponent: The public exponent of the RSA key.
-    /// - Modulus: The modulus of the RSA key, adjusted to a positive MSB if required.
-    /// - Comment: An optional comment field, which defaults to None.
+    /// Parameters:
+    /// - `pem`: A PEM-encoded RSA public key string.
+    ///
+    /// Returns:
+    /// - An instance of the `PublicKey` class initialized with the parsed key data.
+    ///
+    /// Exceptions:
+    /// - `System.ArgumentException`: Thrown when the PEM string is null or empty.
+    /// - `System.Security.Cryptography.CryptographicException`: Thrown when the PEM format is invalid.
+    static member ParseRsaPublicKeyPem (pem:string) =
+        PublicKey.ParseRsaPublicKeyPem(pem, null)
+
+    /// Attempts to parse an SSH public key from its string representation without throwing exceptions.
+    ///
+    /// This is a safer alternative to `ParseSshPublicKey` that returns a boolean indicating success
+    /// rather than throwing exceptions on parse failures.
+    ///
+    /// Parameters:
+    /// - `keyLine`: A string representation of the SSH public key,
+    ///   typically in the form `<algorithm> <base64-key-data> [optional-comment]`.
+    /// - `publicKey`: When this method returns, contains the parsed `PublicKey` if successful,
+    ///   or null if parsing failed.
+    ///
+    /// Returns:
+    /// - `true` if the key was successfully parsed; otherwise, `false`.
+    static member TryParseSshPublicKey (keyLine:string, [<Out>] publicKey:byref<PublicKey>) =
+        try
+            publicKey <- PublicKey.ParseSshPublicKey(keyLine)
+            true
+        with
+        | _ ->
+            publicKey <- null
+            false
+
+    /// Attempts to parse a PEM-encoded RSA public key without throwing exceptions.
+    ///
+    /// This is a safer alternative to `ParseRsaPublicKeyPem` that returns a boolean indicating success
+    /// rather than throwing exceptions on parse failures.
+    ///
+    /// Parameters:
+    /// - `pem`: A PEM-encoded RSA public key string.
+    /// - `comment`: An optional comment to associate with the public key.
+    /// - `publicKey`: When this method returns, contains the parsed `PublicKey` if successful,
+    ///   or null if parsing failed.
+    ///
+    /// Returns:
+    /// - `true` if the key was successfully parsed; otherwise, `false`.
+    static member TryParseRsaPublicKeyPem (pem:string, comment:string, [<Out>] publicKey:byref<PublicKey>) =
+        try
+            publicKey <- PublicKey.ParseRsaPublicKeyPem(pem, comment)
+            true
+        with
+        | _ ->
+            publicKey <- null
+            false
+
+    /// Attempts to parse a PEM-encoded RSA public key without throwing exceptions.
+    ///
+    /// This is a safer alternative to `ParseRsaPublicKeyPem` that returns a boolean indicating success
+    /// rather than throwing exceptions on parse failures.
+    ///
+    /// Parameters:
+    /// - `pem`: A PEM-encoded RSA public key string.
+    /// - `publicKey`: When this method returns, contains the parsed `PublicKey` if successful,
+    ///   or null if parsing failed.
+    ///
+    /// Returns:
+    /// - `true` if the key was successfully parsed; otherwise, `false`.
+    static member TryParseRsaPublicKeyPem (pem:string, [<Out>] publicKey:byref<PublicKey>) =
+        PublicKey.TryParseRsaPublicKeyPem(pem, null, &publicKey)
+
+    /// Parses an SSH public key from its string representation.
+    /// <remarks>This method is deprecated. Use <see cref="ParseSshPublicKey"/> instead.</remarks>
+    [<System.Obsolete("Use ParseSshPublicKey instead.")>]
+    static member OfSshPublicKey (keyLine:string) =
+        PublicKey.ParseSshPublicKey(keyLine)
+
+    /// Parses a PEM-encoded RSA public key with an optional comment.
+    /// <remarks>This method is deprecated. Use <see cref="ParseRsaPublicKeyPem"/> instead.</remarks>
+    [<System.Obsolete("Use ParseRsaPublicKeyPem instead.")>]
+    static member OfRsaPublicKeyPem (pem:string, comment:string) =
+        PublicKey.ParseRsaPublicKeyPem(pem, comment)
+
+    /// Parses a PEM-encoded RSA public key.
+    /// <remarks>This method is deprecated. Use <see cref="ParseRsaPublicKeyPem"/> instead.</remarks>
+    [<System.Obsolete("Use ParseRsaPublicKeyPem instead.")>]
     static member OfRsaPublicKeyPem (pem:string) =
-        PublicKey.OfRsaPublicKeyPem(pem, null)
+        PublicKey.ParseRsaPublicKeyPem(pem)
 
     /// Converts a `PublicKey` to an RSA public key represented as an `RSA` object.
     /// This function uses the `Exponent` and `Modulus` properties of the given `PublicKey`

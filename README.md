@@ -13,12 +13,14 @@ See the [SshCATests](SshCATests) project for examples.
 * Read RSA public keys from a PEM file for use with signing.
 * Write RSA public keys as OpenSSH public keys
 * Sign OpenSSH public keys with an RSA implementation such as `System.Security.Cryptography.RSA` or the one returned by `Azure.Security.KeyVault.Keys.Cryptography.CryptographyClient.CreateRSA`.
+* Safe parsing with `TryParse*` methods that don't throw exceptions
 
 ### Important Information
 
 * Conversion between RSA and OpenSSH public keys always formats them as `ssh-rsa`.
 * Certificates need to be signed with SHA-512 as the signatures are always formatted as `rsa-sha2-512`.
 * Generated certificate algorithm is always `rsa-sha2-512-cert-v01@openssh.com`.
+* Only `ssh-rsa` algorithm is currently supported. Parsing validates that the algorithm matches between the key line and embedded data.
 
 
 The goal is to allow external service to sign SSH keys, so this gives some flexibility in what RSA implementation is
@@ -46,7 +48,7 @@ var mySshPubKey =
             "id_rsa.pub"
         )
     );
-var pubKey = PublicKey.OfSshPublicKey(mySshPubKey);
+var pubKey = PublicKey.ParseSshPublicKey(mySshPubKey);
 
 // Get the CA public key from Azure Key Vault
 var cred = new Azure.Identity.DefaultAzureCredential();
@@ -58,7 +60,7 @@ SshCA.PublicKey caPubKey = null;
 string caPubKeySsh = null;
 using (var rsa = caRsaPubKey.Value.Key.ToRSA()) {
     var caPubKeyPem = rsa.ExportRSAPublicKeyPem();
-    caPubKey = SshCA.PublicKey.OfRsaPublicKeyPem(caPubKeyPem);
+    caPubKey = SshCA.PublicKey.ParseRsaPublicKeyPem(caPubKeyPem);
     caPubKeySsh = SshCA.PublicKey.ToSshPublicKey(caPubKey);
 }
 // Note: the OpenSSH formatted key `caPubKeySsh` should be added to a file and
@@ -94,3 +96,46 @@ File.WriteAllText(
     signedCert
 );
 ```
+
+### Safe Parsing with TryParse Methods
+
+For scenarios where you want to handle parse failures gracefully without exceptions, use the `TryParse*` methods:
+
+```csharp
+using SshCA;
+
+// Safe parsing of SSH public key
+PublicKey pubKey;
+if (PublicKey.TryParseSshPublicKey(sshKeyString, out pubKey))
+{
+    // Successfully parsed
+    Console.WriteLine($"Algorithm: {pubKey.Algorithm}");
+}
+else
+{
+    // Parsing failed - invalid format, null input, etc.
+    Console.WriteLine("Failed to parse SSH public key");
+}
+
+// Safe parsing of PEM format
+PublicKey pemPubKey;
+if (PublicKey.TryParseRsaPublicKeyPem(pemString, out pemPubKey))
+{
+    // Successfully parsed
+    var sshKey = PublicKey.ToSshPublicKey(pemPubKey);
+}
+
+// Safe parsing with a comment
+PublicKey pemPubKeyWithComment;
+if (PublicKey.TryParseRsaPublicKeyPem(pemString, "my-key-comment", out pemPubKeyWithComment))
+{
+    Console.WriteLine($"Comment: {pemPubKeyWithComment.Comment}");
+}
+```
+
+The `TryParse*` methods return `false` and set the out parameter to `null` for any of these conditions:
+- Null or empty input
+- Invalid base64 encoding
+- Malformed key data
+- Oversized input (>10,000 characters for SSH keys)
+- Invalid PEM format

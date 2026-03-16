@@ -29,8 +29,8 @@ let tests =
     testList "SSH Certificate Tests" [
         test "End to end with ssh-keygen validation" {
             use ca = RSA.Create()
-            let caPubKey = ca.ExportRSAPublicKeyPem() |> PublicKey.OfRsaPublicKeyPem
-            let pubKeyToSign = TestData.testSshKey |> PublicKey.OfSshPublicKey
+            let caPubKey = ca.ExportRSAPublicKeyPem() |> PublicKey.ParseRsaPublicKeyPem
+            let pubKeyToSign = TestData.testSshKey |> PublicKey.ParseSshPublicKey
             let certInfo =
                 CertificateInfo("testkey", pubKeyToSign, caPubKey,
                                 TestData.nonce,
@@ -87,8 +87,8 @@ let tests =
         }
         testTask "CA with async signing function" {
             let ca = RSA.Create()
-            let caPubKey = ca.ExportRSAPublicKeyPem() |> PublicKey.OfRsaPublicKeyPem
-            let pubKeyToSign = TestData.testSshKey |> PublicKey.OfSshPublicKey
+            let caPubKey = ca.ExportRSAPublicKeyPem() |> PublicKey.ParseRsaPublicKeyPem
+            let pubKeyToSign = TestData.testSshKey |> PublicKey.ParseSshPublicKey
             let certInfo =
                 CertificateInfo("testkey", pubKeyToSign, caPubKey,
                                 TestData.nonce,
@@ -119,8 +119,8 @@ let certificateInfoTests =
     testList "CertificateInfo Tests" [
         test "Constructor with auto-generated nonce creates 32-byte nonce" {
             use ca = RSA.Create()
-            let caPubKey = ca.ExportRSAPublicKeyPem() |> PublicKey.OfRsaPublicKeyPem
-            let pubKeyToSign = TestData.testSshKey |> PublicKey.OfSshPublicKey
+            let caPubKey = ca.ExportRSAPublicKeyPem() |> PublicKey.ParseRsaPublicKeyPem
+            let pubKeyToSign = TestData.testSshKey |> PublicKey.ParseSshPublicKey
             
             let certInfo = CertificateInfo("testkey", pubKeyToSign, caPubKey)
             
@@ -130,8 +130,8 @@ let certificateInfoTests =
 
         test "Constructor with explicit nonce uses provided nonce" {
             use ca = RSA.Create()
-            let caPubKey = ca.ExportRSAPublicKeyPem() |> PublicKey.OfRsaPublicKeyPem
-            let pubKeyToSign = TestData.testSshKey |> PublicKey.OfSshPublicKey
+            let caPubKey = ca.ExportRSAPublicKeyPem() |> PublicKey.ParseRsaPublicKeyPem
+            let pubKeyToSign = TestData.testSshKey |> PublicKey.ParseSshPublicKey
             let customNonce = Array.create 32 42uy
             
             let certInfo = CertificateInfo("testkey", pubKeyToSign, caPubKey, customNonce)
@@ -141,8 +141,8 @@ let certificateInfoTests =
 
         test "Multiple principals are preserved" {
             use ca = RSA.Create()
-            let caPubKey = ca.ExportRSAPublicKeyPem() |> PublicKey.OfRsaPublicKeyPem
-            let pubKeyToSign = TestData.testSshKey |> PublicKey.OfSshPublicKey
+            let caPubKey = ca.ExportRSAPublicKeyPem() |> PublicKey.ParseRsaPublicKeyPem
+            let pubKeyToSign = TestData.testSshKey |> PublicKey.ParseSshPublicKey
             
             let certInfo = CertificateInfo("testkey", pubKeyToSign, caPubKey, TestData.nonce)
             certInfo.Principals <- ["user1"; "user2"; "user3"]
@@ -156,8 +156,8 @@ let certificateInfoTests =
 
         test "Multiple principals work end-to-end with ssh-keygen" {
             use ca = RSA.Create()
-            let caPubKey = ca.ExportRSAPublicKeyPem() |> PublicKey.OfRsaPublicKeyPem
-            let pubKeyToSign = TestData.testSshKey |> PublicKey.OfSshPublicKey
+            let caPubKey = ca.ExportRSAPublicKeyPem() |> PublicKey.ParseRsaPublicKeyPem
+            let pubKeyToSign = TestData.testSshKey |> PublicKey.ParseSshPublicKey
             let certInfo =
                 CertificateInfo("multiuser", pubKeyToSign, caPubKey,
                                 TestData.nonce,
@@ -215,8 +215,8 @@ let certificateInfoTests =
 
         test "Empty principals array is allowed" {
             use ca = RSA.Create()
-            let caPubKey = ca.ExportRSAPublicKeyPem() |> PublicKey.OfRsaPublicKeyPem
-            let pubKeyToSign = TestData.testSshKey |> PublicKey.OfSshPublicKey
+            let caPubKey = ca.ExportRSAPublicKeyPem() |> PublicKey.ParseRsaPublicKeyPem
+            let pubKeyToSign = TestData.testSshKey |> PublicKey.ParseSshPublicKey
             
             let certInfo = CertificateInfo("testkey", pubKeyToSign, caPubKey, TestData.nonce)
             certInfo.Principals <- Array.Empty<string>()
@@ -227,8 +227,8 @@ let certificateInfoTests =
 
         test "Serial number can be set and retrieved" {
             use ca = RSA.Create()
-            let caPubKey = ca.ExportRSAPublicKeyPem() |> PublicKey.OfRsaPublicKeyPem
-            let pubKeyToSign = TestData.testSshKey |> PublicKey.OfSshPublicKey
+            let caPubKey = ca.ExportRSAPublicKeyPem() |> PublicKey.ParseRsaPublicKeyPem
+            let pubKeyToSign = TestData.testSshKey |> PublicKey.ParseSshPublicKey
             
             let certInfo = CertificateInfo("testkey", pubKeyToSign, caPubKey, TestData.nonce)
             certInfo.Serial <- 999999UL
@@ -238,8 +238,8 @@ let certificateInfoTests =
 
         test "KeyId can be modified" {
             use ca = RSA.Create()
-            let caPubKey = ca.ExportRSAPublicKeyPem() |> PublicKey.OfRsaPublicKeyPem
-            let pubKeyToSign = TestData.testSshKey |> PublicKey.OfSshPublicKey
+            let caPubKey = ca.ExportRSAPublicKeyPem() |> PublicKey.ParseRsaPublicKeyPem
+            let pubKeyToSign = TestData.testSshKey |> PublicKey.ParseSshPublicKey
             
             let certInfo = CertificateInfo("original", pubKeyToSign, caPubKey, TestData.nonce)
             certInfo.KeyId <- "modified-key-id"
@@ -249,8 +249,8 @@ let certificateInfoTests =
 
         test "ValidAfter and ValidBefore can be set" {
             use ca = RSA.Create()
-            let caPubKey = ca.ExportRSAPublicKeyPem() |> PublicKey.OfRsaPublicKeyPem
-            let pubKeyToSign = TestData.testSshKey |> PublicKey.OfSshPublicKey
+            let caPubKey = ca.ExportRSAPublicKeyPem() |> PublicKey.ParseRsaPublicKeyPem
+            let pubKeyToSign = TestData.testSshKey |> PublicKey.ParseSshPublicKey
             
             let certInfo = CertificateInfo("testkey", pubKeyToSign, caPubKey, TestData.nonce)
             let validAfter = DateTimeOffset(DateTime(2026, 1, 1, 0, 0, 0))
@@ -264,8 +264,8 @@ let certificateInfoTests =
 
         test "CriticalOptions can be set" {
             use ca = RSA.Create()
-            let caPubKey = ca.ExportRSAPublicKeyPem() |> PublicKey.OfRsaPublicKeyPem
-            let pubKeyToSign = TestData.testSshKey |> PublicKey.OfSshPublicKey
+            let caPubKey = ca.ExportRSAPublicKeyPem() |> PublicKey.ParseRsaPublicKeyPem
+            let pubKeyToSign = TestData.testSshKey |> PublicKey.ParseSshPublicKey
             
             let certInfo = CertificateInfo("testkey", pubKeyToSign, caPubKey, TestData.nonce)
             certInfo.CriticalOptions <- ["force-command=/bin/bash"; "source-address=192.168.1.0/24"]
@@ -278,8 +278,8 @@ let certificateInfoTests =
 
         test "Extensions can be set" {
             use ca = RSA.Create()
-            let caPubKey = ca.ExportRSAPublicKeyPem() |> PublicKey.OfRsaPublicKeyPem
-            let pubKeyToSign = TestData.testSshKey |> PublicKey.OfSshPublicKey
+            let caPubKey = ca.ExportRSAPublicKeyPem() |> PublicKey.ParseRsaPublicKeyPem
+            let pubKeyToSign = TestData.testSshKey |> PublicKey.ParseSshPublicKey
             
             let certInfo = CertificateInfo("testkey", pubKeyToSign, caPubKey, TestData.nonce)
             certInfo.Extensions <- ["permit-X11-forwarding"; "permit-agent-forwarding"; "permit-port-forwarding"]
@@ -293,8 +293,8 @@ let certificateInfoTests =
 
         test "Nonce can be changed after construction" {
             use ca = RSA.Create()
-            let caPubKey = ca.ExportRSAPublicKeyPem() |> PublicKey.OfRsaPublicKeyPem
-            let pubKeyToSign = TestData.testSshKey |> PublicKey.OfSshPublicKey
+            let caPubKey = ca.ExportRSAPublicKeyPem() |> PublicKey.ParseRsaPublicKeyPem
+            let pubKeyToSign = TestData.testSshKey |> PublicKey.ParseSshPublicKey
             
             let certInfo = CertificateInfo("testkey", pubKeyToSign, caPubKey, TestData.nonce)
             let newNonce = Array.create 32 99uy
@@ -305,8 +305,8 @@ let certificateInfoTests =
 
         test "PublicKeyToSign property returns correct key" {
             use ca = RSA.Create()
-            let caPubKey = ca.ExportRSAPublicKeyPem() |> PublicKey.OfRsaPublicKeyPem
-            let pubKeyToSign = TestData.testSshKey |> PublicKey.OfSshPublicKey
+            let caPubKey = ca.ExportRSAPublicKeyPem() |> PublicKey.ParseRsaPublicKeyPem
+            let pubKeyToSign = TestData.testSshKey |> PublicKey.ParseSshPublicKey
             
             let certInfo = CertificateInfo("testkey", pubKeyToSign, caPubKey, TestData.nonce)
             
@@ -315,8 +315,8 @@ let certificateInfoTests =
 
         test "CaPublicKey property returns correct key" {
             use ca = RSA.Create()
-            let caPubKey = ca.ExportRSAPublicKeyPem() |> PublicKey.OfRsaPublicKeyPem
-            let pubKeyToSign = TestData.testSshKey |> PublicKey.OfSshPublicKey
+            let caPubKey = ca.ExportRSAPublicKeyPem() |> PublicKey.ParseRsaPublicKeyPem
+            let pubKeyToSign = TestData.testSshKey |> PublicKey.ParseSshPublicKey
             
             let certInfo = CertificateInfo("testkey", pubKeyToSign, caPubKey, TestData.nonce)
             
@@ -325,8 +325,8 @@ let certificateInfoTests =
 
         test "Special characters in KeyId are preserved" {
             use ca = RSA.Create()
-            let caPubKey = ca.ExportRSAPublicKeyPem() |> PublicKey.OfRsaPublicKeyPem
-            let pubKeyToSign = TestData.testSshKey |> PublicKey.OfSshPublicKey
+            let caPubKey = ca.ExportRSAPublicKeyPem() |> PublicKey.ParseRsaPublicKeyPem
+            let pubKeyToSign = TestData.testSshKey |> PublicKey.ParseSshPublicKey
             let specialKeyId = "test-key_123@domain.com"
             
             let certInfo = CertificateInfo(specialKeyId, pubKeyToSign, caPubKey, TestData.nonce)
@@ -336,8 +336,8 @@ let certificateInfoTests =
 
         test "Special characters in principals are preserved" {
             use ca = RSA.Create()
-            let caPubKey = ca.ExportRSAPublicKeyPem() |> PublicKey.OfRsaPublicKeyPem
-            let pubKeyToSign = TestData.testSshKey |> PublicKey.OfSshPublicKey
+            let caPubKey = ca.ExportRSAPublicKeyPem() |> PublicKey.ParseRsaPublicKeyPem
+            let pubKeyToSign = TestData.testSshKey |> PublicKey.ParseSshPublicKey
             
             let certInfo = CertificateInfo("testkey", pubKeyToSign, caPubKey, TestData.nonce)
             certInfo.Principals <- ["user@host.com"; "user-name_123"]
@@ -353,8 +353,8 @@ let certificateAuthorityTests =
     testList "CertificateAuthority Tests" [
         test "Sign returns byte array" {
             use ca = RSA.Create()
-            let caPubKey = ca.ExportRSAPublicKeyPem() |> PublicKey.OfRsaPublicKeyPem
-            let pubKeyToSign = TestData.testSshKey |> PublicKey.OfSshPublicKey
+            let caPubKey = ca.ExportRSAPublicKeyPem() |> PublicKey.ParseRsaPublicKeyPem
+            let pubKeyToSign = TestData.testSshKey |> PublicKey.ParseSshPublicKey
             let certInfo =
                 CertificateInfo("testkey", pubKeyToSign, caPubKey,
                                 TestData.nonce,
@@ -381,8 +381,8 @@ let certificateAuthorityTests =
 
         test "Sign throws ArgumentException for invalid nonce length" {
             use ca = RSA.Create()
-            let caPubKey = ca.ExportRSAPublicKeyPem() |> PublicKey.OfRsaPublicKeyPem
-            let pubKeyToSign = TestData.testSshKey |> PublicKey.OfSshPublicKey
+            let caPubKey = ca.ExportRSAPublicKeyPem() |> PublicKey.ParseRsaPublicKeyPem
+            let pubKeyToSign = TestData.testSshKey |> PublicKey.ParseSshPublicKey
             let invalidNonce = Array.create 16 0uy // Wrong size
             let certInfo = CertificateInfo("testkey", pubKeyToSign, caPubKey, invalidNonce)
             let certAuth = CertificateAuthority(fun ms -> ca.SignData(ms, HashAlgorithmName.SHA512, RSASignaturePadding.Pkcs1))
@@ -394,8 +394,8 @@ let certificateAuthorityTests =
 
         test "SignAndSerialize with null comment omits comment" {
             use ca = RSA.Create()
-            let caPubKey = ca.ExportRSAPublicKeyPem() |> PublicKey.OfRsaPublicKeyPem
-            let pubKeyToSign = TestData.testSshKey |> PublicKey.OfSshPublicKey
+            let caPubKey = ca.ExportRSAPublicKeyPem() |> PublicKey.ParseRsaPublicKeyPem
+            let pubKeyToSign = TestData.testSshKey |> PublicKey.ParseSshPublicKey
             let certInfo =
                 CertificateInfo("testkey", pubKeyToSign, caPubKey,
                                 TestData.nonce,
@@ -414,8 +414,8 @@ let certificateAuthorityTests =
 
         test "SignAndSerialize with empty comment omits comment" {
             use ca = RSA.Create()
-            let caPubKey = ca.ExportRSAPublicKeyPem() |> PublicKey.OfRsaPublicKeyPem
-            let pubKeyToSign = TestData.testSshKey |> PublicKey.OfSshPublicKey
+            let caPubKey = ca.ExportRSAPublicKeyPem() |> PublicKey.ParseRsaPublicKeyPem
+            let pubKeyToSign = TestData.testSshKey |> PublicKey.ParseSshPublicKey
             let certInfo =
                 CertificateInfo("testkey", pubKeyToSign, caPubKey,
                                 TestData.nonce,
@@ -433,8 +433,8 @@ let certificateAuthorityTests =
 
         test "SignAndSerialize with whitespace comment omits comment" {
             use ca = RSA.Create()
-            let caPubKey = ca.ExportRSAPublicKeyPem() |> PublicKey.OfRsaPublicKeyPem
-            let pubKeyToSign = TestData.testSshKey |> PublicKey.OfSshPublicKey
+            let caPubKey = ca.ExportRSAPublicKeyPem() |> PublicKey.ParseRsaPublicKeyPem
+            let pubKeyToSign = TestData.testSshKey |> PublicKey.ParseSshPublicKey
             let certInfo =
                 CertificateInfo("testkey", pubKeyToSign, caPubKey,
                                 TestData.nonce,
@@ -452,8 +452,8 @@ let certificateAuthorityTests =
 
         test "SignAndSerialize with comment includes comment" {
             use ca = RSA.Create()
-            let caPubKey = ca.ExportRSAPublicKeyPem() |> PublicKey.OfRsaPublicKeyPem
-            let pubKeyToSign = TestData.testSshKey |> PublicKey.OfSshPublicKey
+            let caPubKey = ca.ExportRSAPublicKeyPem() |> PublicKey.ParseRsaPublicKeyPem
+            let pubKeyToSign = TestData.testSshKey |> PublicKey.ParseSshPublicKey
             let certInfo =
                 CertificateInfo("testkey", pubKeyToSign, caPubKey,
                                 TestData.nonce,
@@ -481,8 +481,8 @@ let certificateAuthorityTests =
 
         test "Different nonces produce different certificates" {
             use ca = RSA.Create()
-            let caPubKey = ca.ExportRSAPublicKeyPem() |> PublicKey.OfRsaPublicKeyPem
-            let pubKeyToSign = TestData.testSshKey |> PublicKey.OfSshPublicKey
+            let caPubKey = ca.ExportRSAPublicKeyPem() |> PublicKey.ParseRsaPublicKeyPem
+            let pubKeyToSign = TestData.testSshKey |> PublicKey.ParseSshPublicKey
             let nonce1 = Array.create 32 1uy
             let nonce2 = Array.create 32 2uy
             
@@ -515,8 +515,8 @@ let certificateAuthorityAsyncTests =
         testTask "SignAsync with cancellation token returns byte array" {
             let ca = RSA.Create()
             try
-                let caPubKey = ca.ExportRSAPublicKeyPem() |> PublicKey.OfRsaPublicKeyPem
-                let pubKeyToSign = TestData.testSshKey |> PublicKey.OfSshPublicKey
+                let caPubKey = ca.ExportRSAPublicKeyPem() |> PublicKey.ParseRsaPublicKeyPem
+                let pubKeyToSign = TestData.testSshKey |> PublicKey.ParseSshPublicKey
                 let certInfo =
                     CertificateInfo("testkey", pubKeyToSign, caPubKey,
                                     TestData.nonce,
@@ -543,8 +543,8 @@ let certificateAuthorityAsyncTests =
         testTask "SignAsync without cancellation token works" {
             let ca = RSA.Create()
             try
-                let caPubKey = ca.ExportRSAPublicKeyPem() |> PublicKey.OfRsaPublicKeyPem
-                let pubKeyToSign = TestData.testSshKey |> PublicKey.OfSshPublicKey
+                let caPubKey = ca.ExportRSAPublicKeyPem() |> PublicKey.ParseRsaPublicKeyPem
+                let pubKeyToSign = TestData.testSshKey |> PublicKey.ParseSshPublicKey
                 let certInfo =
                     CertificateInfo("testkey", pubKeyToSign, caPubKey,
                                     TestData.nonce,
@@ -596,8 +596,8 @@ let certificateAuthorityAsyncTests =
         testTask "SignAsync throws ArgumentException for invalid nonce length" {
             let ca = RSA.Create()
             try
-                let caPubKey = ca.ExportRSAPublicKeyPem() |> PublicKey.OfRsaPublicKeyPem
-                let pubKeyToSign = TestData.testSshKey |> PublicKey.OfSshPublicKey
+                let caPubKey = ca.ExportRSAPublicKeyPem() |> PublicKey.ParseRsaPublicKeyPem
+                let pubKeyToSign = TestData.testSshKey |> PublicKey.ParseSshPublicKey
                 let invalidNonce = Array.create 16 0uy // Wrong size
                 let certInfo = CertificateInfo("testkey", pubKeyToSign, caPubKey, invalidNonce)
                 let asyncSigner =
@@ -626,8 +626,8 @@ let certificateAuthorityAsyncTests =
         testTask "SignAndSerializeAsync with null comment omits comment" {
             let ca = RSA.Create()
             try
-                let caPubKey = ca.ExportRSAPublicKeyPem() |> PublicKey.OfRsaPublicKeyPem
-                let pubKeyToSign = TestData.testSshKey |> PublicKey.OfSshPublicKey
+                let caPubKey = ca.ExportRSAPublicKeyPem() |> PublicKey.ParseRsaPublicKeyPem
+                let pubKeyToSign = TestData.testSshKey |> PublicKey.ParseSshPublicKey
                 let certInfo =
                     CertificateInfo("testkey", pubKeyToSign, caPubKey,
                                     TestData.nonce,
@@ -654,8 +654,8 @@ let certificateAuthorityAsyncTests =
         testTask "SignAndSerializeAsync with empty comment omits comment" {
             let ca = RSA.Create()
             try
-                let caPubKey = ca.ExportRSAPublicKeyPem() |> PublicKey.OfRsaPublicKeyPem
-                let pubKeyToSign = TestData.testSshKey |> PublicKey.OfSshPublicKey
+                let caPubKey = ca.ExportRSAPublicKeyPem() |> PublicKey.ParseRsaPublicKeyPem
+                let pubKeyToSign = TestData.testSshKey |> PublicKey.ParseSshPublicKey
                 let certInfo =
                     CertificateInfo("testkey", pubKeyToSign, caPubKey,
                                     TestData.nonce,
@@ -681,8 +681,8 @@ let certificateAuthorityAsyncTests =
         testTask "SignAndSerializeAsync with comment includes comment" {
             let ca = RSA.Create()
             try
-                let caPubKey = ca.ExportRSAPublicKeyPem() |> PublicKey.OfRsaPublicKeyPem
-                let pubKeyToSign = TestData.testSshKey |> PublicKey.OfSshPublicKey
+                let caPubKey = ca.ExportRSAPublicKeyPem() |> PublicKey.ParseRsaPublicKeyPem
+                let pubKeyToSign = TestData.testSshKey |> PublicKey.ParseSshPublicKey
                 let certInfo =
                     CertificateInfo("testkey", pubKeyToSign, caPubKey,
                                     TestData.nonce,
@@ -735,8 +735,8 @@ let certificateAuthorityAsyncTests =
         testTask "Cancellation token is passed through to signing function" {
             let ca = RSA.Create()
             try
-                let caPubKey = ca.ExportRSAPublicKeyPem() |> PublicKey.OfRsaPublicKeyPem
-                let pubKeyToSign = TestData.testSshKey |> PublicKey.OfSshPublicKey
+                let caPubKey = ca.ExportRSAPublicKeyPem() |> PublicKey.ParseRsaPublicKeyPem
+                let pubKeyToSign = TestData.testSshKey |> PublicKey.ParseSshPublicKey
                 let certInfo =
                     CertificateInfo("testkey", pubKeyToSign, caPubKey,
                                     TestData.nonce,
@@ -764,8 +764,8 @@ let certificateAuthorityAsyncTests =
         testTask "Different nonces produce different certificates async" {
             let ca = RSA.Create()
             try
-                let caPubKey = ca.ExportRSAPublicKeyPem() |> PublicKey.OfRsaPublicKeyPem
-                let pubKeyToSign = TestData.testSshKey |> PublicKey.OfSshPublicKey
+                let caPubKey = ca.ExportRSAPublicKeyPem() |> PublicKey.ParseRsaPublicKeyPem
+                let pubKeyToSign = TestData.testSshKey |> PublicKey.ParseSshPublicKey
                 let nonce1 = Array.create 32 1uy
                 let nonce2 = Array.create 32 2uy
                 
