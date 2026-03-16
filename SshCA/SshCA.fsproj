@@ -18,7 +18,7 @@
     </PropertyGroup>
     
     <ItemGroup>
-        <PackageReference Update="FSharp.Core" Version="6.0.0" PrivateAssets="all"/>
+        <PackageReference Update="FSharp.Core" Version="7.0.0" />
     </ItemGroup>
 
     <ItemGroup>
