@@ -339,19 +339,19 @@ type PublicKey with
 
     /// Parses an SSH public key from its string representation.
     /// <remarks>This method is deprecated. Use <see cref="ParseSshPublicKey"/> instead.</remarks>
-    [<System.Obsolete("Use ParseSshPublicKey instead.")>]
+    [<System.Obsolete("OfSshPublicKey is deprecated. Use ParseSshPublicKey(string) instead for better .NET naming consistency.", false)>]
     static member OfSshPublicKey (keyLine:string) =
         PublicKey.ParseSshPublicKey(keyLine)
 
     /// Parses a PEM-encoded RSA public key with an optional comment.
     /// <remarks>This method is deprecated. Use <see cref="ParseRsaPublicKeyPem"/> instead.</remarks>
-    [<System.Obsolete("Use ParseRsaPublicKeyPem instead.")>]
+    [<System.Obsolete("OfRsaPublicKeyPem is deprecated. Use ParseRsaPublicKeyPem(string, string) instead for better .NET naming consistency.", false)>]
     static member OfRsaPublicKeyPem (pem:string, comment:string) =
         PublicKey.ParseRsaPublicKeyPem(pem, comment)
 
     /// Parses a PEM-encoded RSA public key.
     /// <remarks>This method is deprecated. Use <see cref="ParseRsaPublicKeyPem"/> instead.</remarks>
-    [<System.Obsolete("Use ParseRsaPublicKeyPem instead.")>]
+    [<System.Obsolete("OfRsaPublicKeyPem is deprecated. Use ParseRsaPublicKeyPem(string) instead for better .NET naming consistency.", false)>]
     static member OfRsaPublicKeyPem (pem:string) =
         PublicKey.ParseRsaPublicKeyPem(pem)
 

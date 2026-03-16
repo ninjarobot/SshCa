@@ -20,9 +20,49 @@ namespace SshCA
 open System
 open System.IO
 open System.Security.Cryptography
+open System.Collections.Generic
 
-[<AllowNullLiteral>]
+/// Common SSH certificate extensions that can be included in user certificates.
+module CertificateExtensions =
+    /// Allows allocation of a pseudo-terminal (pty). Required for interactive shells.
+    [<Literal>]
+    let PermitPty = "permit-pty"
+    
+    /// Allows forwarding of the ssh-agent.
+    [<Literal>]
+    let PermitAgentForwarding = "permit-agent-forwarding"
+    
+    /// Allows port forwarding.
+    [<Literal>]
+    let PermitPortForwarding = "permit-port-forwarding"
+    
+    /// Allows X11 forwarding.
+    [<Literal>]
+    let PermitX11Forwarding = "permit-X11-forwarding"
+    
+    /// Allows execution of ~/.ssh/rc.
+    [<Literal>]
+    let PermitUserRc = "permit-user-rc"
+
+/// Common SSH certificate critical options.
+module CertificateCriticalOptions =
+    /// Forces a specific command to be executed. The command string should be provided as the value.
+    [<Literal>]
+    let ForceCommand = "force-command"
+    
+    /// Restricts the source addresses from which the certificate is valid.
+    /// The value should be a comma-separated list of CIDR blocks.
+    [<Literal>]
+    let SourceAddress = "source-address"
+
+/// <summary>
+/// Contains information about a certificate to be signed.
+/// Note: This class is not thread-safe and should not be shared across threads.
+/// </summary>
 type CertificateInfo(keyId:string, publicKeyToSign:PublicKey, caPublicKey:PublicKey, nonce:byte array) =
+    let mutable extensions = ResizeArray<string * string>()
+    let mutable criticalOptions = ResizeArray<string * string>()
+    
     member val Nonce = nonce with get, set
     member val PublicKeyToSign = publicKeyToSign with get
     member val Serial = 0UL with get, set
@@ -30,9 +70,114 @@ type CertificateInfo(keyId:string, publicKeyToSign:PublicKey, caPublicKey:Public
     member val Principals = Array.Empty<string>() :> System.Collections.Generic.IEnumerable<string> with get, set
     member val ValidAfter = DateTimeOffset.MinValue with get, set
     member val ValidBefore = DateTimeOffset.MinValue with get, set
-    member val CriticalOptions = Array.Empty<string>() :> System.Collections.Generic.IEnumerable<string> with get, set
-    member val Extensions = Array.Empty<string>() :> System.Collections.Generic.IEnumerable<string> with get, set
+    
+    /// Gets the critical options as a sequence of strings (legacy format).
+    /// The sequence contains alternating name and value strings.
+    /// Note: The getter creates a new sequence on each access. Cache the result if accessing repeatedly.
+    /// To add critical options, use the AddCriticalOption or AddForceCommand/AddSourceAddress helper methods.
+    member _.CriticalOptions 
+        with get() = 
+            let result = ResizeArray<string>(criticalOptions.Count * 2)
+            for (name, value) in criticalOptions do
+                result.Add(name)
+                result.Add(value)
+            result :> IEnumerable<string>
+        /// Sets the critical options using alternating name-value pairs.
+        /// <remarks>This setter is deprecated. Use AddCriticalOption, AddForceCommand, or AddSourceAddress instead for a clearer API.</remarks>
+        and [<System.Obsolete("Setting CriticalOptions with the property setter is deprecated. Use AddCriticalOption(name, value) or AddForceCommand/AddSourceAddress helper methods instead for better clarity.", false)>] set(value) = 
+            criticalOptions.Clear()
+            if not (obj.ReferenceEquals(value, null)) then
+                // Convert IEnumerable to array using BCL List<T>
+                let valueSeq = value :> IEnumerable<string>
+                let items = List<string>(valueSeq).ToArray()
+                for i in 0 .. 2 .. items.Length - 1 do
+                    if i + 1 < items.Length then
+                        criticalOptions.Add((items[i], items[i + 1]))
+    
+    /// Gets the extensions as a sequence of strings (legacy format).
+    /// The sequence contains alternating name and value strings.
+    /// Note: The getter creates a new sequence on each access. Cache the result if accessing repeatedly.
+    /// To add extensions, use the AddExtension or AddPermit* helper methods.
+    member _.Extensions 
+        with get() = 
+            let result = ResizeArray<string>(extensions.Count * 2)
+            for (name, value) in extensions do
+                result.Add(name)
+                result.Add(value)
+            result :> IEnumerable<string>
+        /// Sets the extensions using alternating name-value pairs.
+        /// <remarks>This setter is deprecated. Use AddExtension, AddPermitPty, or other helper methods instead for a clearer API.</remarks>
+        and [<System.Obsolete("Setting Extensions with the property setter is deprecated. Use AddExtension(name, value) or AddPermit* helper methods instead for better clarity.", false)>] set(value) = 
+            extensions.Clear()
+            if not (obj.ReferenceEquals(value, null)) then
+                // Convert IEnumerable to array using BCL List<T>
+                let valueSeq = value :> IEnumerable<string>
+                let items = List<string>(valueSeq).ToArray()
+                for i in 0 .. 2 .. items.Length - 1 do
+                    if i + 1 < items.Length then
+                        extensions.Add((items[i], items[i + 1]))
+    
     member val CaPublicKey = caPublicKey with get
+    
+    /// Adds an extension to the certificate.
+    /// Common extensions: permit-pty, permit-agent-forwarding, permit-port-forwarding, permit-X11-forwarding, permit-user-rc
+    /// Most extensions have empty data (pass empty string).
+    member _.AddExtension(name: string, data: string) =
+        if String.IsNullOrEmpty(name) then invalidArg "name" "Extension name cannot be null or empty"
+        let dataValue = if isNull data then "" else data
+        extensions.Add((name, dataValue))
+        
+    /// Adds an extension with no data to the certificate.
+    /// Common extensions: permit-pty, permit-agent-forwarding, permit-port-forwarding, permit-X11-forwarding, permit-user-rc
+    member this.AddExtension(name: string) =
+        this.AddExtension(name, "")
+    
+    /// Adds the permit-pty extension, which allows allocation of a pseudo-terminal.
+    /// This is required for interactive shells.
+    member this.AddPermitPty() =
+        this.AddExtension(CertificateExtensions.PermitPty)
+    
+    /// Adds the permit-agent-forwarding extension, which allows forwarding of the ssh-agent.
+    member this.AddPermitAgentForwarding() =
+        this.AddExtension(CertificateExtensions.PermitAgentForwarding)
+    
+    /// Adds the permit-port-forwarding extension, which allows port forwarding.
+    member this.AddPermitPortForwarding() =
+        this.AddExtension(CertificateExtensions.PermitPortForwarding)
+    
+    /// Adds the permit-X11-forwarding extension, which allows X11 forwarding.
+    member this.AddPermitX11Forwarding() =
+        this.AddExtension(CertificateExtensions.PermitX11Forwarding)
+    
+    /// Adds the permit-user-rc extension, which allows execution of ~/.ssh/rc.
+    member this.AddPermitUserRc() =
+        this.AddExtension(CertificateExtensions.PermitUserRc)
+    
+    /// Adds all common permit extensions (pty, agent-forwarding, port-forwarding, X11-forwarding, user-rc).
+    member this.AddAllPermitExtensions() =
+        this.AddPermitPty()
+        this.AddPermitAgentForwarding()
+        this.AddPermitPortForwarding()
+        this.AddPermitX11Forwarding()
+        this.AddPermitUserRc()
+    
+    /// Adds a critical option to the certificate.
+    /// Common critical options: force-command (with command string), source-address (with CIDR list)
+    member _.AddCriticalOption(name: string, data: string) =
+        if String.IsNullOrEmpty(name) then invalidArg "name" "Critical option name cannot be null or empty"
+        let dataValue = if isNull data then "" else data
+        criticalOptions.Add((name, dataValue))
+    
+    /// Adds the force-command critical option, which forces execution of a specific command.
+    member this.AddForceCommand(command: string) =
+        if String.IsNullOrEmpty(command) then invalidArg "command" "Command cannot be null or empty"
+        this.AddCriticalOption(CertificateCriticalOptions.ForceCommand, command)
+    
+    /// Adds the source-address critical option, which restricts source addresses.
+    /// Accepts a comma-separated list of CIDR blocks (e.g., "192.168.1.0/24,10.0.0.0/8").
+    member this.AddSourceAddress(cidrList: string) =
+        if String.IsNullOrEmpty(cidrList) then invalidArg "cidrList" "CIDR list cannot be null or empty"
+        this.AddCriticalOption(CertificateCriticalOptions.SourceAddress, cidrList)
 
     new (keyId:string, publicKeyToSign:PublicKey, caPublicKey:PublicKey) =
         CertificateInfo(keyId, publicKeyToSign, caPublicKey, RandomNumberGenerator.GetBytes 32)
