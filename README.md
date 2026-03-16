@@ -3,6 +3,7 @@ SshCA
 
 [![Build and Test](https://github.com/ninjarobot/SshCa/actions/workflows/build-and-test.yml/badge.svg)](https://github.com/ninjarobot/SshCa/actions/workflows/build-and-test.yml)
 [![SshCa on Nuget](https://img.shields.io/nuget/v/SshCA)](https://www.nuget.org/packages/SshCA/)
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/ninjarobot/SshCa)
 
 Use SSH public key and and CA certificates to sign SSH public keys. It can be used to read and write SSH public keys, convert between dotnet RSA public keys and the OpenSSH format, and to sign OpenSSH public keys in the format used by OpenSSH.
 
