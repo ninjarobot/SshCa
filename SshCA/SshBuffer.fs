@@ -29,7 +29,16 @@ type SshBuffer(stream:Stream) =
         let sizeBuf : byte array = [| 0uy; 0uy; 0uy; 0uy |]
         stream.ReadExactly(sizeBuf)
         let len = BinaryPrimitives.ReadUInt32BigEndian sizeBuf
-        let data : byte array = Array.CreateInstance(typeof<byte>, Convert.ToInt32 len) :?> byte array
+        
+        // Validate length to prevent integer overflow and DoS attacks
+        if len > uint32 Int32.MaxValue then
+            raise (ArgumentException($"SSH data length {len} exceeds maximum allowed size of {Int32.MaxValue} bytes"))
+        
+        // SSH keys are typically < 10KB, certificates < 100KB. Reject unreasonably large data to prevent DoS.
+        if len > 10_000_000u then // 10MB limit
+            raise (ArgumentException($"SSH data length {len} exceeds reasonable limit of 10MB"))
+        
+        let data : byte array = Array.CreateInstance(typeof<byte>, int len) :?> byte array
         stream.ReadExactly data
         data
 
